@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Household Expenses</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{
+    --bg:#f6f5f2; --card:#ffffff; --border:#e3e1da; --text:#1f1e1c; --muted:#6b6a63;
+    --accent:#2a78d6; --accent2:#eb6834; --danger:#d03b3b; --success:#0ca30c;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:16px;max-width:900px;margin:0 auto;}
+  h1{font-size:20px;font-weight:600;margin:4px 0 16px;}
+  h2{font-size:15px;font-weight:600;margin:0 0 10px;}
+  .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+  .tab{padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;font-size:13px;}
+  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
+  input,select{width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;background:#fff;}
+  button{padding:9px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;cursor:pointer;}
+  button:disabled{opacity:0.5;cursor:not-allowed;}
+  button.secondary{background:transparent;color:var(--text);border:1px solid var(--border);}
+  button.danger{background:transparent;color:var(--danger);border:1px solid var(--border);padding:4px 8px;font-size:12px;}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
+  .row:last-child{border-bottom:none;}
+  .muted{color:var(--muted);font-size:12px;}
+  .metric{background:#f1f0eb;border-radius:10px;padding:12px;text-align:center;}
+  .metric .val{font-size:20px;font-weight:600;}
+  .metric .lbl{font-size:11px;color:var(--muted);}
+  .badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#eef2fb;color:var(--accent);}
+  #status{font-size:12px;color:var(--muted);margin-bottom:10px;}
+  #status.err{color:var(--danger);}
+  #status.ok{color:var(--success);}
+</style>
+</head>
+<body>
+
+<div id="lock-screen" style="max-width:340px;margin:80px auto;text-align:center;">
+  <h1>🏠 Household Expenses</h1>
+  <p class="muted">Enter the shared password to continue</p>
+  <input id="lock-input" type="password" placeholder="Password" style="margin-bottom:10px;" onkeydown="if(event.key==='Enter') tryUnlock()">
+  <button onclick="tryUnlock()" style="width:100%;">Unlock</button>
+  <p id="lock-error" style="color:var(--danger);font-size:12px;display:none;">Wrong password, try again.</p>
+</div>
+
+<div id="app-wrap" style="display:none;">
+<h1>🏠 Household Expenses</h1>
+<div id="status">Loading...</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="entry">Add expense</div>
+  <div class="tab" data-tab="list">All expenses</div>
+  <div class="tab" data-tab="reports">Reports</div>
+  <div class="tab" data-tab="settings">Settings</div>
+</div>
+
+<div id="entry" class="tab-content">
+  <div class="card">
+    <h2>New expense</h2>
+    <div class="grid2">
+      <div><label>Amount (₹)</label><input id="f-amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div><label>Date</label><input id="f-date" type="date"></div>
+      <div><label>Category</label><select id="f-category"></select></div>
+      <div><label>Paid by</label><select id="f-payer"></select></div>
+      <div><label>Split</label>
+        <select id="f-split">
+          <option value="equal">Equal 50/50</option>
+          <option value="payer">Payer covers it (not shared)</option>
+          <option value="custom">Custom %</option>
+        </select>
+      </div>
+      <div id="f-custom-wrap" style="display:none;"><label>Payer's share %</label><input id="f-custom" type="number" value="50" min="0" max="100"></div>
+    </div>
+    <div style="margin-top:10px;"><label>Notes</label><input id="f-notes" placeholder="e.g. Big Bazaar - groceries"></div>
+    <div style="margin-top:14px;"><button id="add-btn" onclick="addExpense()">Add expense</button></div>
+  </div>
+</div>
+
+<div id="list" class="tab-content" style="display:none;">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h2 style="margin:0;">All expenses</h2>
+      <select id="filter-month" style="width:auto;"></select>
+    </div>
+    <div id="expense-list"></div>
+  </div>
+</div>
+
+<div id="reports" class="tab-content" style="display:none;">
+  <div class="card">
+    <h2>This month</h2>
+    <div class="grid3" id="metrics"></div>
+  </div>
+  <div class="card">
+    <h2>Spend by category (this month)</h2>
+    <div style="position:relative;height:260px;"><canvas id="catChart" role="img" aria-label="Bar chart of spend by category"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Monthly trend & variance</h2>
+    <div style="position:relative;height:260px;"><canvas id="trendChart" role="img" aria-label="Line chart of monthly spend trend"></canvas></div>
+    <div id="variance-note" class="muted" style="margin-top:8px;"></div>
+  </div>
+  <div class="card">
+    <h2>Who owes whom</h2>
+    <div id="balance-box"></div>
+  </div>
+</div>
+
+<div id="settings" class="tab-content" style="display:none;">
+  <div class="card">
+    <h2>People</h2>
+    <div class="grid2">
+      <div><label>Person 1 name</label><input id="s-p1" placeholder="e.g. Raj"></div>
+      <div><label>Person 2 name</label><input id="s-p2" placeholder="e.g. Roommate"></div>
+    </div>
+    <div style="margin-top:10px;"><button onclick="saveNames()">Save names</button></div>
+  </div>
+  <div class="card">
+    <h2>Categories</h2>
+    <div id="cat-list"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <input id="new-cat" placeholder="New category">
+      <button class="secondary" onclick="addCategory()">Add</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Data source</h2>
+    <p class="muted">Connected to your Google Sheet via Apps Script.</p>
+    <button class="secondary" onclick="loadAll(true)">Refresh now</button>
+  </div>
+</div>
+
+<script>
+// ==== CONFIGURE THIS ====
+const API_URL = 'https://script.google.com/macros/s/AKfycbyGzgwexZLp_jlwknqpO7crEiiQePXGpO38rl4j8kmD1BiFY3nDVFv6jKzF5EcOJCk0wQ/exec';
+// =========================
+
+let EXPENSES = [];
+let CONFIG = { people: ['Person 1','Person 2'], categories: ['Groceries','Rent','Utilities','Dining out','Household items','Transport','Internet/Phone','Other'] };
+
+function setStatus(msg, cls){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = cls || '';
+}
+
+async function apiGet(action){
+  const url = action ? `${API_URL}?action=${action}` : API_URL;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+
+async function apiPost(payload){
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+
+async function loadAll(manual){
+  setStatus('Syncing with Google Sheet...');
+  try{
+    const [expenses, config] = await Promise.all([apiGet(), apiGet('getConfig')]);
+    EXPENSES = Array.isArray(expenses) ? expenses : [];
+    if(config && config.people && config.people.length===2) CONFIG.people = config.people;
+    if(config && config.categories && config.categories.length) CONFIG.categories = config.categories;
+    setStatus('Synced with Google Sheet' + (manual ? ' (refreshed)' : ''), 'ok');
+    render();
+  }catch(e){
+    setStatus('Could not reach the Sheet — check the API URL and your internet connection', 'err');
+    console.error(e);
+  }
+}
+
+function populateSelects(){
+  document.getElementById('f-category').innerHTML = CONFIG.categories.map(c=>`<option>${c}</option>`).join('');
+  document.getElementById('f-payer').innerHTML = CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+}
+
+document.getElementById('f-split').addEventListener('change', e=>{
+  document.getElementById('f-custom-wrap').style.display = e.target.value==='custom' ? 'block' : 'none';
+});
+
+async function addExpense(){
+  const amount = parseFloat(document.getElementById('f-amount').value);
+  if(!amount || amount<=0){ alert('Enter a valid amount'); return; }
+  const date = document.getElementById('f-date').value || new Date().toISOString().slice(0,10);
+  const category = document.getElementById('f-category').value;
+  const payer = document.getElementById('f-payer').value;
+  const split = document.getElementById('f-split').value;
+  const customPct = split==='custom' ? parseFloat(document.getElementById('f-custom').value)||50 : '';
+  const notes = document.getElementById('f-notes').value;
+  const expense = { id: Date.now()+'-'+Math.random().toString(36).slice(2,7), amount, date, category, payer, split, customPct, notes };
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try{
+    await apiPost({ action:'addExpense', expense });
+    EXPENSES.push(expense);
+    document.getElementById('f-amount').value='';
+    document.getElementById('f-notes').value='';
+    setStatus('Saved to Sheet', 'ok');
+    render();
+  }catch(e){
+    setStatus('Failed to save — try again', 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Add expense';
+}
+
+async function deleteExpense(id){
+  try{
+    await apiPost({ action:'deleteExpense', id });
+    EXPENSES = EXPENSES.filter(e=>e.id!==id);
+    render();
+  }catch(e){
+    setStatus('Failed to delete — try again', 'err');
+  }
+}
+
+async function addCategory(){
+  const v = document.getElementById('new-cat').value.trim();
+  if(v && !CONFIG.categories.includes(v)){
+    CONFIG.categories.push(v);
+    document.getElementById('new-cat').value='';
+    await apiPost({ action:'saveConfig', config: CONFIG });
+    render();
+  }
+}
+async function removeCategory(c){
+  CONFIG.categories = CONFIG.categories.filter(x=>x!==c);
+  await apiPost({ action:'saveConfig', config: CONFIG });
+  render();
+}
+async function saveNames(){
+  const p1 = document.getElementById('s-p1').value.trim() || CONFIG.people[0];
+  const p2 = document.getElementById('s-p2').value.trim() || CONFIG.people[1];
+  CONFIG.people = [p1,p2];
+  await apiPost({ action:'saveConfig', config: CONFIG });
+  render();
+}
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+    document.getElementById(t.dataset.tab).style.display='block';
+    if(t.dataset.tab==='reports') renderReports();
+    if(t.dataset.tab==='list') renderList();
+  });
+});
+
+function fmt(n){ return '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:2}); }
+function monthKey(d){ return String(d).slice(0,7); }
+
+function render(){
+  populateSelects();
+  const months = [...new Set(EXPENSES.map(e=>monthKey(e.date)))].sort().reverse();
+  const filterEl = document.getElementById('filter-month');
+  const cur = filterEl.value;
+  filterEl.innerHTML = '<option value="all">All months</option>' + months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  if(months.includes(cur)) filterEl.value = cur;
+  filterEl.onchange = renderList;
+  renderList();
+  renderSettings();
+  if(document.getElementById('reports').style.display!=='none') renderReports();
+}
+
+function renderList(){
+  const filter = document.getElementById('filter-month').value;
+  const list = [...EXPENSES].filter(e=> filter==='all' || monthKey(e.date)===filter).sort((a,b)=> String(b.date).localeCompare(String(a.date)));
+  const el = document.getElementById('expense-list');
+  if(list.length===0){ el.innerHTML = '<p class="muted">No expenses yet.</p>'; return; }
+  el.innerHTML = list.map(e=>`
+    <div class="row">
+      <div>
+        <div style="font-weight:500;">${e.category} <span class="badge">${e.payer}</span></div>
+        <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · ${e.split==='equal'?'split 50/50':e.split==='payer'?'not shared':'split '+e.customPct+'/'+(100-e.customPct)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-weight:600;">${fmt(e.amount)}</div>
+        <button class="danger" onclick="deleteExpense('${e.id}')">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSettings(){
+  document.getElementById('s-p1').value = CONFIG.people[0];
+  document.getElementById('s-p2').value = CONFIG.people[1];
+  document.getElementById('cat-list').innerHTML = CONFIG.categories.map(c=>`
+    <div class="row"><span>${c}</span><button class="danger" onclick="removeCategory('${c}')">✕</button></div>
+  `).join('');
+}
+
+let catChartInst, trendChartInst;
+
+function renderReports(){
+  const now = new Date();
+  const thisMonth = now.toISOString().slice(0,7);
+  const thisMonthExp = EXPENSES.filter(e=>monthKey(e.date)===thisMonth);
+  const total = thisMonthExp.reduce((s,e)=>s+Number(e.amount),0);
+  const count = thisMonthExp.length;
+  const avg = count ? total/count : 0;
+
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric"><div class="val">${fmt(total)}</div><div class="lbl">Total spent</div></div>
+    <div class="metric"><div class="val">${count}</div><div class="lbl">Transactions</div></div>
+    <div class="metric"><div class="val">${fmt(avg)}</div><div class="lbl">Avg per entry</div></div>
+  `;
+
+  const byCat = {};
+  thisMonthExp.forEach(e=> byCat[e.category] = (byCat[e.category]||0) + Number(e.amount));
+  const catLabels = Object.keys(byCat);
+  const catVals = catLabels.map(c=>byCat[c]);
+
+  if(catChartInst) catChartInst.destroy();
+  catChartInst = new Chart(document.getElementById('catChart'), {
+    type:'bar',
+    data:{ labels: catLabels, datasets:[{ label:'Spend', data: catVals, backgroundColor:'#2a78d6', borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ ticks:{ callback:v=>'₹'+v } } } }
+  });
+
+  const allMonths = [...new Set(EXPENSES.map(e=>monthKey(e.date)))].sort();
+  const last6 = allMonths.slice(-6);
+  const monthTotals = last6.map(m=> EXPENSES.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e.amount),0));
+
+  if(trendChartInst) trendChartInst.destroy();
+  trendChartInst = new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{ labels: last6, datasets:[{ label:'Monthly total', data: monthTotals, borderColor:'#eb6834', backgroundColor:'rgba(235,104,52,0.1)', fill:true, tension:0.2 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ ticks:{ callback:v=>'₹'+v } } } }
+  });
+
+  if(last6.length>=2){
+    const cur = monthTotals[monthTotals.length-1];
+    const prev = monthTotals[monthTotals.length-2];
+    const diff = cur - prev;
+    const pct = prev ? (diff/prev*100) : 0;
+    document.getElementById('variance-note').textContent =
+      `${last6[last6.length-1]} vs ${last6[last6.length-2]}: ${diff>=0?'up':'down'} ${fmt(Math.abs(diff))} (${pct>=0?'+':''}${pct.toFixed(1)}%)`;
+  } else {
+    document.getElementById('variance-note').textContent = 'Need at least 2 months of data for variance comparison.';
+  }
+
+  const [p1,p2] = CONFIG.people;
+  let p1paid=0,p2paid=0,p1owes=0,p2owes=0;
+  EXPENSES.forEach(e=>{
+    if(e.split==='payer') return;
+    let p1share, p2share;
+    if(e.split==='custom'){ p1share = e.payer===p1 ? Number(e.customPct)/100 : (100-Number(e.customPct))/100; p2share = 1-p1share; }
+    else { p1share=0.5; p2share=0.5; }
+    if(e.payer===p1) p1paid += Number(e.amount); else p2paid += Number(e.amount);
+    p1owes += Number(e.amount)*p1share;
+    p2owes += Number(e.amount)*p2share;
+  });
+  const net = p1paid - p1owes - (p2paid - p2owes);
+  const box = document.getElementById('balance-box');
+  if(Math.abs(net) < 0.5){
+    box.innerHTML = `<p class="muted">You're settled up.</p>`;
+  } else if(net > 0){
+    box.innerHTML = `<p><strong>${p2}</strong> owes <strong>${p1}</strong> <span style="color:var(--success);font-weight:600;">${fmt(net)}</span></p>`;
+  } else {
+    box.innerHTML = `<p><strong>${p1}</strong> owes <strong>${p2}</strong> <span style="color:var(--success);font-weight:600;">${fmt(-net)}</span></p>`;
+  }
+}
+
+const APP_PASSWORD = 'Expenses@2026';
+
+function tryUnlock(){
+  const val = document.getElementById('lock-input').value;
+  if(val === APP_PASSWORD){
+    sessionStorage.setItem('unlocked', 'yes');
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app-wrap').style.display = 'block';
+    startApp();
+  } else {
+    document.getElementById('lock-error').style.display = 'block';
+  }
+}
+
+function startApp(){
+  document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+  loadAll();
+}
+
+if(sessionStorage.getItem('unlocked') === 'yes'){
+  document.getElementById('lock-screen').style.display = 'none';
+  document.getElementById('app-wrap').style.display = 'block';
+  startApp();
+}
+</script>
+</div>
+</body>
+</html>
