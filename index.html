@@ -153,10 +153,6 @@
 
 <div id="history" class="tab-content" style="display:none;">
   <div class="card">
-    <h2>Edited entries</h2>
-    <div id="edited-list"><p class="muted">No edited entries.</p></div>
-  </div>
-  <div class="card">
     <h2>Deleted entries</h2>
     <div id="deleted-list"><p class="muted">No deleted entries.</p></div>
   </div>
@@ -332,7 +328,7 @@ function askEditExpense(id){
   if(!e) return;
   pendingEditId = id;
   document.getElementById('e-amount').value = e.amount;
-  document.getElementById('e-date').value = e.date;
+  document.getElementById('e-date').value = String(e.date||'').slice(0,10);
   document.getElementById('e-category').innerHTML = CONFIG.categories.map(c=>`<option ${c===e.category?'selected':''}>${c}</option>`).join('');
   document.getElementById('e-payer').innerHTML = CONFIG.people.map(p=>`<option ${p===e.payer?'selected':''}>${p}</option>`).join('');
   document.getElementById('e-split').value = e.split;
@@ -598,8 +594,20 @@ function renderList(){
             <strong>Split:</strong> ${e.split==='equal'?'Equal 50/50':e.split==='payer'?'Not shared (personal)':'Custom '+e.customPct+'/'+(100-e.customPct)}<br>
             ${e.notes ? `<strong>Notes:</strong> ${e.notes}<br>` : ''}
             ${e.receiptUrl ? `<strong>Receipt:</strong> <a href="${e.receiptUrl}" target="_blank">View screenshot</a><br>` : ''}
-            ${e.lastEditedAt ? `<strong>Last edited:</strong> by ${e.lastEditedBy} on ${fmtTime(e.lastEditedAt)} — reason: ${e.lastEditReason}<br>` : ''}
           </div>
+          ${(() => {
+            const priorVersions = EDITED.filter(x=>x.id===e.id).sort((a,b)=> String(b.editedAt||'').localeCompare(String(a.editedAt||'')));
+            if(!priorVersions.length) return '';
+            return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">
+              <div style="font-weight:600;font-size:12.5px;margin-bottom:6px;">Previous version${priorVersions.length>1?'s':''}</div>
+              ${priorVersions.map(v=>`
+                <div class="muted" style="background:#f7f6f2;border-radius:8px;padding:8px 10px;margin-bottom:6px;line-height:1.6;">
+                  Edited by <strong>${v.editedBy}</strong> on ${fmtTime(v.editedAt)} — reason: ${v.reason}<br>
+                  Was: ${fmt(v.amount)} · ${v.date} · ${v.category} · paid by ${v.payer}${v.notes ? ' · '+v.notes : ''}
+                </div>
+              `).join('')}
+            </div>`;
+          })()}
           <div style="display:flex;gap:8px;margin-top:10px;">
             <button class="secondary" style="flex:1;" onclick="askEditExpense('${e.id}')">Edit</button>
             <button class="icon-btn" style="flex:1;" onclick="askDeleteExpense('${e.id}')">Delete</button>
@@ -620,20 +628,6 @@ function renderHistory(){
         <div>
           <div style="font-weight:500;">${e.category} <span class="badge del">deleted by ${e.deletedBy||'?'}</span></div>
           <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · was ${fmt(e.amount)}${e.reason ? ' · reason: '+e.reason : ''}</div>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  const editEl = document.getElementById('edited-list');
-  if(!EDITED.length){ editEl.innerHTML = '<p class="muted">No edited entries.</p>'; }
-  else{
-    const sorted = [...EDITED].sort((a,b)=> String(b.editedAt||'').localeCompare(String(a.editedAt||'')));
-    editEl.innerHTML = sorted.map(e=>`
-      <div class="row">
-        <div>
-          <div style="font-weight:500;">${e.category} <span class="badge" style="background:#eef6ee;color:var(--success);">edited by ${e.editedBy||'?'}</span></div>
-          <div class="muted">Was ${fmt(e.amount)} on ${e.date}${e.notes ? ' · '+e.notes : ''} · reason: ${e.reason||''}</div>
         </div>
       </div>
     `).join('');
@@ -682,7 +676,11 @@ function renderReports(){
   document.getElementById('personal-breakdown').innerHTML = CONFIG.people.map(p=>`
     <div class="row">
       <div style="font-weight:500;">${p}</div>
-      <div class="muted">Personal: ${fmt(personalTotals[p])} · Shared paid: ${fmt(sharedTotals[p])} · <strong style="color:var(--text);">Total: ${fmt(personalTotals[p]+shareOfTotals[p])}</strong></div>
+      <div class="muted" style="text-align:right;">
+        Actually paid out: <strong style="color:var(--text);">${fmt(personalTotals[p]+sharedTotals[p])}</strong><br>
+        <span style="font-size:11px;">(personal ${fmt(personalTotals[p])} + shared bills covered ${fmt(sharedTotals[p])})</span><br>
+        Fair share of costs: <strong style="color:var(--text);">${fmt(personalTotals[p]+shareOfTotals[p])}</strong>
+      </div>
     </div>
   `).join('');
 
