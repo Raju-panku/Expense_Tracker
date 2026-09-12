@@ -328,7 +328,8 @@ async function addExpense(){
   const customPct = split==='custom' ? parseFloat(document.getElementById('f-custom').value)||50 : '';
   const notes = document.getElementById('f-notes').value;
   const receiptDataUrl = document.getElementById('receipt-preview').dataset.dataurl || '';
-  const expense = { id: Date.now()+'-'+Math.random().toString(36).slice(2,7), amount, date, category, payer, split, customPct, notes };
+  const createdAt = new Date().toISOString();
+  const expense = { id: Date.now()+'-'+Math.random().toString(36).slice(2,7), amount, date, category, payer, split, customPct, notes, createdAt };
 
   const btn = document.getElementById('add-btn');
   btn.disabled = true; btn.textContent = receiptDataUrl ? 'Uploading photo...' : 'Saving...';
@@ -423,6 +424,16 @@ document.querySelectorAll('.tab').forEach(t=>{
 
 function fmt(n){ return '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:2}); }
 function monthKey(d){ return String(d).slice(0,7); }
+function fmtTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2,'0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if(h===0) h = 12;
+  return `${h}:${m} ${ampm}`;
+}
 
 function render(){
   populateSelects();
@@ -459,7 +470,7 @@ function renderList(){
         ${e.receiptUrl ? `<a href="${e.receiptUrl}" target="_blank"><img src="${e.receiptUrl}" style="width:38px;height:38px;object-fit:cover;border-radius:6px;border:1px solid var(--border);"></a>` : ''}
         <div>
           <div style="font-weight:500;">${e.category} <span class="badge">${e.payer}</span> ${e.split==='payer' ? '<span class="badge" style="background:#fef3e6;color:#b06a00;">personal</span>' : ''}</div>
-          <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · ${e.split==='equal'?'split 50/50':e.split==='payer'?'not shared':'split '+e.customPct+'/'+(100-e.customPct)}</div>
+          <div class="muted">${e.date}${e.createdAt ? ' · '+fmtTime(e.createdAt) : ''}${e.notes ? ' · '+e.notes : ''} · ${e.split==='equal'?'split 50/50':e.split==='payer'?'not shared':'split '+e.customPct+'/'+(100-e.customPct)}</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -560,17 +571,17 @@ function renderReports(){
   }
 
   const [p1,p2] = CONFIG.people;
-  let p1paid=0,p2paid=0,p1owes=0,p2owes=0;
+  let net = 0; // positive = p2 owes p1, negative = p1 owes p2
   EXPENSES.forEach(e=>{
-    if(e.split==='payer') return;
-    let p1share, p2share;
-    if(e.split==='custom'){ p1share = e.payer===p1 ? Number(e.customPct)/100 : (100-Number(e.customPct))/100; p2share = 1-p1share; }
-    else { p1share=0.5; p2share=0.5; }
-    if(e.payer===p1) p1paid += Number(e.amount); else p2paid += Number(e.amount);
-    p1owes += Number(e.amount)*p1share;
-    p2owes += Number(e.amount)*p2share;
+    if(e.split==='payer') return; // not shared, skip
+    const amount = Number(e.amount);
+    let p1share;
+    if(e.split==='custom'){ p1share = e.payer===p1 ? Number(e.customPct)/100 : (100-Number(e.customPct))/100; }
+    else { p1share = 0.5; }
+    const p2share = 1 - p1share;
+    if(e.payer===p1) net += amount*p2share;      // p1 fronted it, p2 owes their share
+    else if(e.payer===p2) net -= amount*p1share; // p2 fronted it, p1 owes their share
   });
-  const net = p1paid - p1owes - (p2paid - p2owes);
   const box = document.getElementById('balance-box');
   if(Math.abs(net) < 0.5){
     box.innerHTML = `<p class="muted">You're settled up.</p>`;
