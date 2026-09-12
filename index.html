@@ -161,6 +161,9 @@
     <p class="muted" id="delete-modal-desc"></p>
     <label>Who is deleting this?</label>
     <select id="delete-modal-who"></select>
+    <label style="margin-top:10px;">Reason for deleting (required)</label>
+    <input id="delete-modal-reason" placeholder="e.g. entered twice by mistake">
+    <p id="delete-reason-error" style="color:var(--danger);font-size:12px;display:none;margin-top:6px;">Please enter a valid reason.</p>
     <div class="modal-actions">
       <button class="secondary" onclick="closeDeleteModal()">Cancel</button>
       <button class="danger-solid" onclick="confirmDelete()">Delete</button>
@@ -351,22 +354,34 @@ function askDeleteExpense(id){
   pendingDeleteId = id;
   document.getElementById('delete-modal-desc').textContent = `${e.category} · ${fmt(e.amount)} · ${e.date}${e.notes ? ' · '+e.notes : ''}`;
   document.getElementById('delete-modal-who').innerHTML = CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+  document.getElementById('delete-modal-reason').value = '';
+  document.getElementById('delete-reason-error').style.display = 'none';
   document.getElementById('delete-modal').style.display = 'flex';
 }
 function closeDeleteModal(){
   pendingDeleteId = null;
   document.getElementById('delete-modal').style.display = 'none';
 }
+function isValidReason(text){
+  const cleaned = text.replace(/[.,!?;:\-–—_*"'()]/g, '').trim();
+  return cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned);
+}
+
 async function confirmDelete(){
   const id = pendingDeleteId;
   const deletedBy = document.getElementById('delete-modal-who').value;
+  const reason = document.getElementById('delete-modal-reason').value.trim();
+  if(!isValidReason(reason)){
+    document.getElementById('delete-reason-error').style.display = 'block';
+    return;
+  }
   if(!id) return;
   closeDeleteModal();
   try{
-    await apiPost({ action:'deleteExpense', id, deletedBy });
+    await apiPost({ action:'deleteExpense', id, deletedBy, reason });
     const removed = EXPENSES.find(e=>e.id===id);
     EXPENSES = EXPENSES.filter(e=>e.id!==id);
-    if(removed) DELETED.unshift({ ...removed, deletedBy, deletedAt: new Date().toISOString() });
+    if(removed) DELETED.unshift({ ...removed, deletedBy, reason, deletedAt: new Date().toISOString() });
     render();
   }catch(e){
     setStatus('Failed to delete — try again', 'err');
@@ -464,7 +479,7 @@ function renderDeleted(){
     <div class="row">
       <div>
         <div style="font-weight:500;">${e.category} <span class="badge del">deleted by ${e.deletedBy||'?'}</span></div>
-        <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · was ₹${e.amount}</div>
+        <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · was ₹${e.amount}${e.reason ? ' · reason: '+e.reason : ''}</div>
       </div>
     </div>
   `).join('');
