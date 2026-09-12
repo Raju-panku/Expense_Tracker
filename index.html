@@ -2,61 +2,114 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Household Expenses</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   :root{
-    --bg:#f6f5f2; --card:#ffffff; --border:#e3e1da; --text:#1f1e1c; --muted:#6b6a63;
+    --bg:#f4f3ef; --card:#ffffff; --border:#e8e6df; --text:#1f1e1c; --muted:#78766e;
     --accent:#2a78d6; --accent2:#eb6834; --danger:#d03b3b; --success:#0ca30c;
   }
-  *{box-sizing:border-box;}
-  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:16px;max-width:900px;margin:0 auto;}
-  h1{font-size:20px;font-weight:600;margin:4px 0 16px;}
-  h2{font-size:15px;font-weight:600;margin:0 0 10px;}
-  .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
-  .tab{padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;font-size:13px;}
-  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
-  input,select{width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;background:#fff;}
-  button{padding:9px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;cursor:pointer;}
-  button:disabled{opacity:0.5;cursor:not-allowed;}
-  button.secondary{background:transparent;color:var(--text);border:1px solid var(--border);}
-  button.danger{background:transparent;color:var(--danger);border:1px solid var(--border);padding:4px 8px;font-size:12px;}
-  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
-  .row:last-child{border-bottom:none;}
-  .muted{color:var(--muted);font-size:12px;}
-  .metric{background:#f1f0eb;border-radius:10px;padding:12px;text-align:center;}
-  .metric .val{font-size:20px;font-weight:600;}
-  .metric .lbl{font-size:11px;color:var(--muted);}
-  .badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#eef2fb;color:var(--accent);}
-  #status{font-size:12px;color:var(--muted);margin-bottom:10px;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text);
+    max-width:520px; margin:0 auto;
+    padding:0 0 90px 0;
+    font-size:16px;
+    -webkit-text-size-adjust:100%;
+  }
+  .topbar{
+    position:sticky; top:0; z-index:10;
+    background:var(--bg); padding:16px 16px 10px;
+    border-bottom:1px solid var(--border);
+  }
+  h1{font-size:19px; font-weight:700; margin:0 0 2px; display:flex; align-items:center; gap:8px;}
+  h2{font-size:15px; font-weight:600; margin:0 0 12px;}
+  #status{font-size:12px; color:var(--muted); margin:0;}
   #status.err{color:var(--danger);}
   #status.ok{color:var(--success);}
+
+  main{padding:14px 16px 0;}
+
+  /* bottom tab bar, app-style */
+  .tabs{
+    position:fixed; bottom:0; left:0; right:0;
+    max-width:520px; margin:0 auto;
+    display:flex; background:var(--card);
+    border-top:1px solid var(--border);
+    padding:6px 6px calc(6px + env(safe-area-inset-bottom));
+    z-index:20;
+  }
+  .tab{
+    flex:1; text-align:center; padding:8px 2px;
+    border-radius:10px; cursor:pointer;
+    font-size:11.5px; color:var(--muted); font-weight:500;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .tab .ic{font-size:19px;}
+  .tab.active{color:var(--accent); background:#eaf1fb;}
+
+  .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+
+  label{font-size:12.5px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;}
+  input,select{
+    width:100%; padding:11px 10px; border:1px solid var(--border); border-radius:9px;
+    font-size:16px; background:#fbfbfa; color:var(--text);
+  }
+  input:focus,select:focus{outline:2px solid var(--accent); outline-offset:-1px; background:#fff;}
+
+  button{padding:12px 18px; border:none; border-radius:10px; background:var(--accent); color:#fff; font-size:15px; font-weight:600; cursor:pointer;}
+  button:disabled{opacity:0.5; cursor:not-allowed;}
+  button.secondary{background:transparent; color:var(--text); border:1px solid var(--border);}
+  button.danger-solid{background:var(--danger);}
+  button.full{width:100%;}
+  button.icon-btn{padding:8px 10px; border-radius:8px; background:transparent; border:1px solid var(--border); color:var(--danger); font-size:13px; font-weight:500;}
+
+  .row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); gap:10px;}
+  .row:last-child{border-bottom:none;}
+  .muted{color:var(--muted); font-size:12.5px;}
+  .metric{background:#f1f0eb; border-radius:12px; padding:14px 8px; text-align:center;}
+  .metric .val{font-size:17px; font-weight:700;}
+  .metric .lbl{font-size:10.5px; color:var(--muted); margin-top:2px;}
+  .badge{font-size:11px; padding:2px 9px; border-radius:20px; background:#eef2fb; color:var(--accent); font-weight:600;}
+  .badge.del{background:#fbeaea; color:var(--danger);}
+
+  /* modal for delete confirm */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.45);
+    display:flex; align-items:flex-end; justify-content:center; z-index:100;
+  }
+  .modal-sheet{
+    background:#fff; width:100%; max-width:520px; border-radius:18px 18px 0 0;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+  }
+  .modal-sheet h3{margin:0 0 8px; font-size:16px;}
+  .modal-actions{display:flex; gap:10px; margin-top:16px;}
+  .modal-actions button{flex:1;}
 </style>
 </head>
 <body>
 
-<div id="lock-screen" style="max-width:340px;margin:80px auto;text-align:center;">
-  <h1>🏠 Household Expenses</h1>
-  <p class="muted">Enter the shared password to continue</p>
-  <input id="lock-input" type="password" placeholder="Password" style="margin-bottom:10px;" onkeydown="if(event.key==='Enter') tryUnlock()">
-  <button onclick="tryUnlock()" style="width:100%;">Unlock</button>
-  <p id="lock-error" style="color:var(--danger);font-size:12px;display:none;">Wrong password, try again.</p>
+<div id="lock-screen" style="min-height:90vh; display:flex; flex-direction:column; justify-content:center; padding:24px; text-align:center;">
+  <div style="font-size:44px; margin-bottom:8px;">🏠</div>
+  <h1 style="justify-content:center; font-size:21px;">Household Expenses</h1>
+  <p class="muted" style="margin-bottom:18px;">Enter the shared password to continue</p>
+  <input id="lock-input" type="password" placeholder="Password" style="margin-bottom:12px;" onkeydown="if(event.key==='Enter') tryUnlock()">
+  <button class="full" onclick="tryUnlock()">Unlock</button>
+  <p id="lock-error" style="color:var(--danger);font-size:12px;display:none;margin-top:10px;">Wrong password, try again.</p>
 </div>
 
 <div id="app-wrap" style="display:none;">
-<h1>🏠 Household Expenses</h1>
-<div id="status">Loading...</div>
-
-<div class="tabs">
-  <div class="tab active" data-tab="entry">Add expense</div>
-  <div class="tab" data-tab="list">All expenses</div>
-  <div class="tab" data-tab="reports">Reports</div>
-  <div class="tab" data-tab="settings">Settings</div>
+<div class="topbar">
+  <h1>🏠 Household Expenses</h1>
+  <div id="status">Loading...</div>
 </div>
+
+<main>
 
 <div id="entry" class="tab-content">
   <div class="card">
@@ -87,6 +140,23 @@
       <select id="filter-month" style="width:auto;"></select>
     </div>
     <div id="expense-list"></div>
+  </div>
+  <div class="card">
+    <h2>Deleted entries</h2>
+    <div id="deleted-list"><p class="muted">No deleted entries.</p></div>
+  </div>
+</div>
+
+<div id="delete-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-sheet">
+    <h3>Delete this expense?</h3>
+    <p class="muted" id="delete-modal-desc"></p>
+    <label>Who is deleting this?</label>
+    <select id="delete-modal-who"></select>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="danger-solid" onclick="confirmDelete()">Delete</button>
+    </div>
   </div>
 </div>
 
@@ -134,13 +204,24 @@
   </div>
 </div>
 
+</main>
+
+<div class="tabs">
+  <div class="tab active" data-tab="entry"><span class="ic">➕</span>Add</div>
+  <div class="tab" data-tab="list"><span class="ic">📋</span>Expenses</div>
+  <div class="tab" data-tab="reports"><span class="ic">📊</span>Reports</div>
+  <div class="tab" data-tab="settings"><span class="ic">⚙️</span>Settings</div>
+</div>
+
 <script>
 // ==== CONFIGURE THIS ====
 const API_URL = 'https://script.google.com/macros/s/AKfycbyGzgwexZLp_jlwknqpO7crEiiQePXGpO38rl4j8kmD1BiFY3nDVFv6jKzF5EcOJCk0wQ/exec';
 // =========================
 
 let EXPENSES = [];
+let DELETED = [];
 let CONFIG = { people: ['Person 1','Person 2'], categories: ['Groceries','Rent','Utilities','Dining out','Household items','Transport','Internet/Phone','Other'] };
+let pendingDeleteId = null;
 
 function setStatus(msg, cls){
   const el = document.getElementById('status');
@@ -168,8 +249,9 @@ async function apiPost(payload){
 async function loadAll(manual){
   setStatus('Syncing with Google Sheet...');
   try{
-    const [expenses, config] = await Promise.all([apiGet(), apiGet('getConfig')]);
+    const [expenses, config, deleted] = await Promise.all([apiGet(), apiGet('getConfig'), apiGet('getDeleted')]);
     EXPENSES = Array.isArray(expenses) ? expenses : [];
+    DELETED = Array.isArray(deleted) ? deleted : [];
     if(config && config.people && config.people.length===2) CONFIG.people = config.people;
     if(config && config.categories && config.categories.length) CONFIG.categories = config.categories;
     setStatus('Synced with Google Sheet' + (manual ? ' (refreshed)' : ''), 'ok');
@@ -215,10 +297,28 @@ async function addExpense(){
   btn.disabled = false; btn.textContent = 'Add expense';
 }
 
-async function deleteExpense(id){
+function askDeleteExpense(id){
+  const e = EXPENSES.find(x=>x.id===id);
+  if(!e) return;
+  pendingDeleteId = id;
+  document.getElementById('delete-modal-desc').textContent = `${e.category} · ${fmt(e.amount)} · ${e.date}${e.notes ? ' · '+e.notes : ''}`;
+  document.getElementById('delete-modal-who').innerHTML = CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+  document.getElementById('delete-modal').style.display = 'flex';
+}
+function closeDeleteModal(){
+  pendingDeleteId = null;
+  document.getElementById('delete-modal').style.display = 'none';
+}
+async function confirmDelete(){
+  const id = pendingDeleteId;
+  const deletedBy = document.getElementById('delete-modal-who').value;
+  if(!id) return;
+  closeDeleteModal();
   try{
-    await apiPost({ action:'deleteExpense', id });
+    await apiPost({ action:'deleteExpense', id, deletedBy });
+    const removed = EXPENSES.find(e=>e.id===id);
     EXPENSES = EXPENSES.filter(e=>e.id!==id);
+    if(removed) DELETED.unshift({ ...removed, deletedBy, deletedAt: new Date().toISOString() });
     render();
   }catch(e){
     setStatus('Failed to delete — try again', 'err');
@@ -287,7 +387,22 @@ function renderList(){
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="font-weight:600;">${fmt(e.amount)}</div>
-        <button class="danger" onclick="deleteExpense('${e.id}')">✕</button>
+        <button class="icon-btn" onclick="askDeleteExpense('${e.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  renderDeleted();
+}
+
+function renderDeleted(){
+  const el = document.getElementById('deleted-list');
+  if(!DELETED.length){ el.innerHTML = '<p class="muted">No deleted entries.</p>'; return; }
+  const sorted = [...DELETED].sort((a,b)=> String(b.deletedAt||'').localeCompare(String(a.deletedAt||'')));
+  el.innerHTML = sorted.map(e=>`
+    <div class="row">
+      <div>
+        <div style="font-weight:500;">${e.category} <span class="badge del">deleted by ${e.deletedBy||'?'}</span></div>
+        <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · was ₹${e.amount}</div>
       </div>
     </div>
   `).join('');
