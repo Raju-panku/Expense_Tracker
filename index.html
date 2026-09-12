@@ -129,15 +129,23 @@
       <div id="f-custom-wrap" style="display:none;"><label>Payer's share %</label><input id="f-custom" type="number" value="50" min="0" max="100"></div>
     </div>
     <div style="margin-top:10px;"><label>Notes</label><input id="f-notes" placeholder="e.g. Big Bazaar - groceries"></div>
-    <div style="margin-top:14px;"><button id="add-btn" onclick="addExpense()">Add expense</button></div>
+    <div style="margin-top:10px;">
+      <label>Payment screenshot (optional)</label>
+      <input id="f-receipt" type="file" accept="image/*" capture="environment">
+      <div id="receipt-preview" style="margin-top:8px;"></div>
+    </div>
+    <div style="margin-top:14px;"><button id="add-btn" class="full" onclick="addExpense()">Add expense</button></div>
   </div>
 </div>
 
 <div id="list" class="tab-content" style="display:none;">
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
       <h2 style="margin:0;">All expenses</h2>
-      <select id="filter-month" style="width:auto;"></select>
+      <div style="display:flex;gap:6px;">
+        <select id="filter-payer" style="width:auto;"></select>
+        <select id="filter-month" style="width:auto;"></select>
+      </div>
     </div>
     <div id="expense-list"></div>
   </div>
@@ -164,6 +172,10 @@
   <div class="card">
     <h2>This month</h2>
     <div class="grid3" id="metrics"></div>
+  </div>
+  <div class="card">
+    <h2>Personal vs shared spend</h2>
+    <div id="personal-breakdown"></div>
   </div>
   <div class="card">
     <h2>Spend by category (this month)</h2>
@@ -271,6 +283,38 @@ document.getElementById('f-split').addEventListener('change', e=>{
   document.getElementById('f-custom-wrap').style.display = e.target.value==='custom' ? 'block' : 'none';
 });
 
+function compressImage(file, maxWidth){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('f-receipt').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  const preview = document.getElementById('receipt-preview');
+  if(!file){ preview.innerHTML=''; return; }
+  preview.innerHTML = '<span class="muted">Preparing image...</span>';
+  const dataUrl = await compressImage(file, 800);
+  preview.innerHTML = `<img src="${dataUrl}" style="max-width:120px;border-radius:8px;border:1px solid var(--border);">`;
+  preview.dataset.dataurl = dataUrl;
+});
+
 async function addExpense(){
   const amount = parseFloat(document.getElementById('f-amount').value);
   if(!amount || amount<=0){ alert('Enter a valid amount'); return; }
@@ -280,15 +324,19 @@ async function addExpense(){
   const split = document.getElementById('f-split').value;
   const customPct = split==='custom' ? parseFloat(document.getElementById('f-custom').value)||50 : '';
   const notes = document.getElementById('f-notes').value;
+  const receiptDataUrl = document.getElementById('receipt-preview').dataset.dataurl || '';
   const expense = { id: Date.now()+'-'+Math.random().toString(36).slice(2,7), amount, date, category, payer, split, customPct, notes };
 
   const btn = document.getElementById('add-btn');
-  btn.disabled = true; btn.textContent = 'Saving...';
+  btn.disabled = true; btn.textContent = receiptDataUrl ? 'Uploading photo...' : 'Saving...';
   try{
-    await apiPost({ action:'addExpense', expense });
+    await apiPost({ action:'addExpense', expense, receiptDataUrl });
     EXPENSES.push(expense);
     document.getElementById('f-amount').value='';
     document.getElementById('f-notes').value='';
+    document.getElementById('f-receipt').value='';
+    document.getElementById('receipt-preview').innerHTML='';
+    delete document.getElementById('receipt-preview').dataset.dataurl;
     setStatus('Saved to Sheet', 'ok');
     render();
   }catch(e){
@@ -369,6 +417,13 @@ function render(){
   filterEl.innerHTML = '<option value="all">All months</option>' + months.map(m=>`<option value="${m}">${m}</option>`).join('');
   if(months.includes(cur)) filterEl.value = cur;
   filterEl.onchange = renderList;
+
+  const payerFilterEl = document.getElementById('filter-payer');
+  const curPayer = payerFilterEl.value;
+  payerFilterEl.innerHTML = '<option value="all">Everyone</option>' + CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+  if(CONFIG.people.includes(curPayer)) payerFilterEl.value = curPayer;
+  payerFilterEl.onchange = renderList;
+
   renderList();
   renderSettings();
   if(document.getElementById('reports').style.display!=='none') renderReports();
@@ -376,14 +431,21 @@ function render(){
 
 function renderList(){
   const filter = document.getElementById('filter-month').value;
-  const list = [...EXPENSES].filter(e=> filter==='all' || monthKey(e.date)===filter).sort((a,b)=> String(b.date).localeCompare(String(a.date)));
+  const payerFilter = document.getElementById('filter-payer').value;
+  const list = [...EXPENSES]
+    .filter(e=> filter==='all' || monthKey(e.date)===filter)
+    .filter(e=> payerFilter==='all' || e.payer===payerFilter)
+    .sort((a,b)=> String(b.date).localeCompare(String(a.date)));
   const el = document.getElementById('expense-list');
   if(list.length===0){ el.innerHTML = '<p class="muted">No expenses yet.</p>'; return; }
   el.innerHTML = list.map(e=>`
     <div class="row">
-      <div>
-        <div style="font-weight:500;">${e.category} <span class="badge">${e.payer}</span></div>
-        <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · ${e.split==='equal'?'split 50/50':e.split==='payer'?'not shared':'split '+e.customPct+'/'+(100-e.customPct)}</div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        ${e.receiptUrl ? `<a href="${e.receiptUrl}" target="_blank"><img src="${e.receiptUrl}" style="width:38px;height:38px;object-fit:cover;border-radius:6px;border:1px solid var(--border);"></a>` : ''}
+        <div>
+          <div style="font-weight:500;">${e.category} <span class="badge">${e.payer}</span> ${e.split==='payer' ? '<span class="badge" style="background:#fef3e6;color:#b06a00;">personal</span>' : ''}</div>
+          <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · ${e.split==='equal'?'split 50/50':e.split==='payer'?'not shared':'split '+e.customPct+'/'+(100-e.customPct)}</div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="font-weight:600;">${fmt(e.amount)}</div>
@@ -431,6 +493,22 @@ function renderReports(){
     <div class="metric"><div class="val">${count}</div><div class="lbl">Transactions</div></div>
     <div class="metric"><div class="val">${fmt(avg)}</div><div class="lbl">Avg per entry</div></div>
   `;
+
+  const [bp1, bp2] = CONFIG.people;
+  const personalTotals = {};
+  const sharedTotals = {};
+  CONFIG.people.forEach(p=>{ personalTotals[p]=0; sharedTotals[p]=0; });
+  thisMonthExp.forEach(e=>{
+    if(!CONFIG.people.includes(e.payer)) return;
+    if(e.split==='payer') personalTotals[e.payer] += Number(e.amount);
+    else sharedTotals[e.payer] += Number(e.amount);
+  });
+  document.getElementById('personal-breakdown').innerHTML = CONFIG.people.map(p=>`
+    <div class="row">
+      <div style="font-weight:500;">${p}</div>
+      <div class="muted">Personal: ${fmt(personalTotals[p])} · Shared paid: ${fmt(sharedTotals[p])}</div>
+    </div>
+  `).join('');
 
   const byCat = {};
   thisMonthExp.forEach(e=> byCat[e.category] = (byCat[e.category]||0) + Number(e.amount));
