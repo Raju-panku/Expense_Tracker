@@ -149,6 +149,13 @@
     </div>
     <div id="expense-list"></div>
   </div>
+</div>
+
+<div id="history" class="tab-content" style="display:none;">
+  <div class="card">
+    <h2>Edited entries</h2>
+    <div id="edited-list"><p class="muted">No edited entries.</p></div>
+  </div>
   <div class="card">
     <h2>Deleted entries</h2>
     <div id="deleted-list"><p class="muted">No deleted entries.</p></div>
@@ -167,6 +174,36 @@
     <div class="modal-actions">
       <button class="secondary" onclick="closeDeleteModal()">Cancel</button>
       <button class="danger-solid" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="edit-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-sheet" style="max-height:85vh;overflow-y:auto;">
+    <h3>Edit expense</h3>
+    <div class="grid2">
+      <div><label>Amount (₹)</label><input id="e-amount" type="number" step="0.01"></div>
+      <div><label>Date</label><input id="e-date" type="date"></div>
+      <div><label>Category</label><select id="e-category"></select></div>
+      <div><label>Paid by</label><select id="e-payer"></select></div>
+      <div><label>Split</label>
+        <select id="e-split">
+          <option value="equal">Equal 50/50</option>
+          <option value="payer">Payer covers it (not shared)</option>
+          <option value="custom">Custom %</option>
+        </select>
+      </div>
+      <div id="e-custom-wrap" style="display:none;"><label>Payer's share %</label><input id="e-custom" type="number" min="0" max="100"></div>
+    </div>
+    <div style="margin-top:10px;"><label>Notes</label><input id="e-notes"></div>
+    <label style="margin-top:10px;">Who is editing?</label>
+    <select id="edit-modal-who"></select>
+    <label style="margin-top:10px;">Reason for editing (required)</label>
+    <input id="edit-modal-reason" placeholder="e.g. wrong amount entered">
+    <p id="edit-reason-error" style="color:var(--danger);font-size:12px;display:none;margin-top:6px;">Please enter a valid reason.</p>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeEditModal()">Cancel</button>
+      <button onclick="confirmEdit()">Save changes</button>
     </div>
   </div>
 </div>
@@ -226,6 +263,7 @@
   <div class="tab" data-tab="list"><span class="ic">📋</span>Expenses</div>
   <div class="tab" data-tab="reports"><span class="ic">📊</span>Reports</div>
   <div class="tab" data-tab="settings"><span class="ic">⚙️</span>Settings</div>
+  <div class="tab" data-tab="history"><span class="ic">🕓</span>History</div>
 </div>
 
 <script>
@@ -235,8 +273,10 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyGzgwexZLp_jlwknqpO7cr
 
 let EXPENSES = [];
 let DELETED = [];
+let EDITED = [];
 let CONFIG = { people: ['Person 1','Person 2'], categories: ['Groceries','Rent','Utilities','Dining out','Household items','Transport','Internet/Phone','Other'] };
 let pendingDeleteId = null;
+let pendingEditId = null;
 
 function setStatus(msg, cls){
   const el = document.getElementById('status');
@@ -264,9 +304,10 @@ async function apiPost(payload){
 async function loadAll(manual){
   setStatus('Syncing with Google Sheet...');
   try{
-    const [expenses, config, deleted] = await Promise.all([apiGet(), apiGet('getConfig'), apiGet('getDeleted')]);
+    const [expenses, config, deleted, edited] = await Promise.all([apiGet(), apiGet('getConfig'), apiGet('getDeleted'), apiGet('getEdited')]);
     EXPENSES = Array.isArray(expenses) ? expenses : [];
     DELETED = Array.isArray(deleted) ? deleted : [];
+    EDITED = Array.isArray(edited) ? edited : [];
     if(config && config.people && config.people.length===2) CONFIG.people = config.people;
     if(config && config.categories && config.categories.length) CONFIG.categories = config.categories;
     setStatus('Synced with Google Sheet' + (manual ? ' (refreshed)' : ''), 'ok');
@@ -280,6 +321,67 @@ async function loadAll(manual){
 function populateSelects(){
   document.getElementById('f-category').innerHTML = CONFIG.categories.map(c=>`<option>${c}</option>`).join('');
   document.getElementById('f-payer').innerHTML = CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+}
+
+document.getElementById('e-split').addEventListener('change', e=>{
+  document.getElementById('e-custom-wrap').style.display = e.target.value==='custom' ? 'block' : 'none';
+});
+
+function askEditExpense(id){
+  const e = EXPENSES.find(x=>x.id===id);
+  if(!e) return;
+  pendingEditId = id;
+  document.getElementById('e-amount').value = e.amount;
+  document.getElementById('e-date').value = e.date;
+  document.getElementById('e-category').innerHTML = CONFIG.categories.map(c=>`<option ${c===e.category?'selected':''}>${c}</option>`).join('');
+  document.getElementById('e-payer').innerHTML = CONFIG.people.map(p=>`<option ${p===e.payer?'selected':''}>${p}</option>`).join('');
+  document.getElementById('e-split').value = e.split;
+  document.getElementById('e-custom-wrap').style.display = e.split==='custom' ? 'block' : 'none';
+  document.getElementById('e-custom').value = e.customPct || 50;
+  document.getElementById('e-notes').value = e.notes || '';
+  document.getElementById('edit-modal-who').innerHTML = CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+  document.getElementById('edit-modal-reason').value = '';
+  document.getElementById('edit-reason-error').style.display = 'none';
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+function closeEditModal(){
+  pendingEditId = null;
+  document.getElementById('edit-modal').style.display = 'none';
+}
+async function confirmEdit(){
+  const id = pendingEditId;
+  const original = EXPENSES.find(x=>x.id===id);
+  if(!id || !original) return;
+  const reason = document.getElementById('edit-modal-reason').value.trim();
+  if(!isValidReason(reason)){
+    document.getElementById('edit-reason-error').style.display = 'block';
+    return;
+  }
+  const editedBy = document.getElementById('edit-modal-who').value;
+  const updated = {
+    id,
+    amount: parseFloat(document.getElementById('e-amount').value),
+    date: document.getElementById('e-date').value,
+    category: document.getElementById('e-category').value,
+    payer: document.getElementById('e-payer').value,
+    split: document.getElementById('e-split').value,
+    customPct: document.getElementById('e-split').value==='custom' ? parseFloat(document.getElementById('e-custom').value)||50 : '',
+    notes: document.getElementById('e-notes').value,
+    createdAt: original.createdAt
+  };
+  closeEditModal();
+  try{
+    await apiPost({ action:'editExpense', original, updated, editedBy, reason });
+    const idx = EXPENSES.findIndex(x=>x.id===id);
+    updated.lastEditedBy = editedBy;
+    updated.lastEditReason = reason;
+    updated.lastEditedAt = new Date().toISOString();
+    EXPENSES[idx] = updated;
+    EDITED.unshift({ ...original, editedBy, reason, editedAt: new Date().toISOString() });
+    render();
+  }catch(e){
+    setStatus('Failed to save edit — try again', 'err');
+  }
 }
 
 document.getElementById('f-split').addEventListener('change', e=>{
@@ -419,6 +521,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     document.getElementById(t.dataset.tab).style.display='block';
     if(t.dataset.tab==='reports') renderReports();
     if(t.dataset.tab==='list') renderList();
+    if(t.dataset.tab==='history') renderHistory();
   });
 });
 
@@ -455,6 +558,13 @@ function render(){
   if(document.getElementById('reports').style.display!=='none') renderReports();
 }
 
+let expandedId = null;
+
+function toggleExpand(id){
+  expandedId = expandedId===id ? null : id;
+  renderList();
+}
+
 function renderList(){
   const filter = document.getElementById('filter-month').value;
   const payerFilter = document.getElementById('filter-payer').value;
@@ -464,36 +574,70 @@ function renderList(){
     .sort((a,b)=> String(b.date).localeCompare(String(a.date)));
   const el = document.getElementById('expense-list');
   if(list.length===0){ el.innerHTML = '<p class="muted">No expenses yet.</p>'; return; }
-  el.innerHTML = list.map(e=>`
-    <div class="row">
-      <div style="display:flex;gap:10px;align-items:center;">
-        ${e.receiptUrl ? `<a href="${e.receiptUrl}" target="_blank"><img src="${e.receiptUrl}" style="width:38px;height:38px;object-fit:cover;border-radius:6px;border:1px solid var(--border);"></a>` : ''}
-        <div>
-          <div style="font-weight:500;">${e.category} <span class="badge">${e.payer}</span> ${e.split==='payer' ? '<span class="badge" style="background:#fef3e6;color:#b06a00;">personal</span>' : ''}</div>
-          <div class="muted">${e.date}${e.createdAt ? ' · '+fmtTime(e.createdAt) : ''}${e.notes ? ' · '+e.notes : ''} · ${e.split==='equal'?'split 50/50':e.split==='payer'?'not shared':'split '+e.customPct+'/'+(100-e.customPct)}</div>
+  el.innerHTML = list.map(e=>{
+    const isOpen = expandedId===e.id;
+    return `
+    <div class="row" style="flex-direction:column;align-items:stretch;cursor:pointer;" onclick="toggleExpand('${e.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+        <div style="display:flex;gap:10px;align-items:center;">
+          ${e.receiptUrl ? `<img src="${e.receiptUrl}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">` : ''}
+          <div>
+            <div style="font-weight:500;">${e.category} <span class="badge">${e.payer}</span> ${e.split==='payer' ? '<span class="badge" style="background:#fef3e6;color:#b06a00;">personal</span>' : ''} ${e.lastEditedAt ? '<span class="badge" style="background:#eef6ee;color:var(--success);">edited</span>' : ''}</div>
+            <div class="muted">${e.date}${e.createdAt ? ' · '+fmtTime(e.createdAt) : ''} · ${fmt(e.amount)}</div>
+          </div>
         </div>
+        <div style="font-size:12px;color:var(--muted);">${isOpen ? '▲' : '▼'}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="font-weight:600;">${fmt(e.amount)}</div>
-        <button class="icon-btn" onclick="askDeleteExpense('${e.id}')">Delete</button>
-      </div>
+      ${isOpen ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);" onclick="event.stopPropagation();">
+          <div class="muted" style="line-height:1.7;">
+            <strong>Amount:</strong> ${fmt(e.amount)}<br>
+            <strong>Date:</strong> ${e.date}${e.createdAt ? ' at '+fmtTime(e.createdAt) : ''}<br>
+            <strong>Category:</strong> ${e.category}<br>
+            <strong>Paid by:</strong> ${e.payer}<br>
+            <strong>Split:</strong> ${e.split==='equal'?'Equal 50/50':e.split==='payer'?'Not shared (personal)':'Custom '+e.customPct+'/'+(100-e.customPct)}<br>
+            ${e.notes ? `<strong>Notes:</strong> ${e.notes}<br>` : ''}
+            ${e.receiptUrl ? `<strong>Receipt:</strong> <a href="${e.receiptUrl}" target="_blank">View screenshot</a><br>` : ''}
+            ${e.lastEditedAt ? `<strong>Last edited:</strong> by ${e.lastEditedBy} on ${fmtTime(e.lastEditedAt)} — reason: ${e.lastEditReason}<br>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="secondary" style="flex:1;" onclick="askEditExpense('${e.id}')">Edit</button>
+            <button class="icon-btn" style="flex:1;" onclick="askDeleteExpense('${e.id}')">Delete</button>
+          </div>
+        </div>
+      ` : ''}
     </div>
-  `).join('');
-  renderDeleted();
+  `;}).join('');
 }
 
-function renderDeleted(){
-  const el = document.getElementById('deleted-list');
-  if(!DELETED.length){ el.innerHTML = '<p class="muted">No deleted entries.</p>'; return; }
-  const sorted = [...DELETED].sort((a,b)=> String(b.deletedAt||'').localeCompare(String(a.deletedAt||'')));
-  el.innerHTML = sorted.map(e=>`
-    <div class="row">
-      <div>
-        <div style="font-weight:500;">${e.category} <span class="badge del">deleted by ${e.deletedBy||'?'}</span></div>
-        <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · was ₹${e.amount}${e.reason ? ' · reason: '+e.reason : ''}</div>
+function renderHistory(){
+  const delEl = document.getElementById('deleted-list');
+  if(!DELETED.length){ delEl.innerHTML = '<p class="muted">No deleted entries.</p>'; }
+  else{
+    const sorted = [...DELETED].sort((a,b)=> String(b.deletedAt||'').localeCompare(String(a.deletedAt||'')));
+    delEl.innerHTML = sorted.map(e=>`
+      <div class="row">
+        <div>
+          <div style="font-weight:500;">${e.category} <span class="badge del">deleted by ${e.deletedBy||'?'}</span></div>
+          <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · was ${fmt(e.amount)}${e.reason ? ' · reason: '+e.reason : ''}</div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  }
+
+  const editEl = document.getElementById('edited-list');
+  if(!EDITED.length){ editEl.innerHTML = '<p class="muted">No edited entries.</p>'; }
+  else{
+    const sorted = [...EDITED].sort((a,b)=> String(b.editedAt||'').localeCompare(String(a.editedAt||'')));
+    editEl.innerHTML = sorted.map(e=>`
+      <div class="row">
+        <div>
+          <div style="font-weight:500;">${e.category} <span class="badge" style="background:#eef6ee;color:var(--success);">edited by ${e.editedBy||'?'}</span></div>
+          <div class="muted">Was ${fmt(e.amount)} on ${e.date}${e.notes ? ' · '+e.notes : ''} · reason: ${e.reason||''}</div>
+        </div>
+      </div>
+    `).join('');
+  }
 }
 
 function renderSettings(){
@@ -523,16 +667,22 @@ function renderReports(){
   const [bp1, bp2] = CONFIG.people;
   const personalTotals = {};
   const sharedTotals = {};
-  CONFIG.people.forEach(p=>{ personalTotals[p]=0; sharedTotals[p]=0; });
+  const shareOfTotals = {};
+  CONFIG.people.forEach(p=>{ personalTotals[p]=0; sharedTotals[p]=0; shareOfTotals[p]=0; });
   thisMonthExp.forEach(e=>{
     if(!CONFIG.people.includes(e.payer)) return;
-    if(e.split==='payer') personalTotals[e.payer] += Number(e.amount);
-    else sharedTotals[e.payer] += Number(e.amount);
+    const amount = Number(e.amount);
+    if(e.split==='payer'){ personalTotals[e.payer] += amount; return; }
+    sharedTotals[e.payer] += amount;
+    let p1share = e.split==='custom' ? (e.payer===bp1 ? Number(e.customPct)/100 : (100-Number(e.customPct))/100) : 0.5;
+    const p2share = 1 - p1share;
+    shareOfTotals[bp1] += amount * p1share;
+    shareOfTotals[bp2] += amount * p2share;
   });
   document.getElementById('personal-breakdown').innerHTML = CONFIG.people.map(p=>`
     <div class="row">
       <div style="font-weight:500;">${p}</div>
-      <div class="muted">Personal: ${fmt(personalTotals[p])} · Shared paid: ${fmt(sharedTotals[p])}</div>
+      <div class="muted">Personal: ${fmt(personalTotals[p])} · Shared paid: ${fmt(sharedTotals[p])} · <strong style="color:var(--text);">Total: ${fmt(personalTotals[p]+shareOfTotals[p])}</strong></div>
     </div>
   `).join('');
 
