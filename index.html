@@ -618,19 +618,46 @@ function renderList(){
   `;}).join('');
 }
 
+let expandedDeletedId = null;
+function toggleExpandDeleted(idx){
+  expandedDeletedId = expandedDeletedId===idx ? null : idx;
+  renderHistory();
+}
+
 function renderHistory(){
   const delEl = document.getElementById('deleted-list');
   if(!DELETED.length){ delEl.innerHTML = '<p class="muted">No deleted entries.</p>'; }
   else{
     const sorted = [...DELETED].sort((a,b)=> String(b.deletedAt||'').localeCompare(String(a.deletedAt||'')));
-    delEl.innerHTML = sorted.map(e=>`
-      <div class="row">
-        <div>
-          <div style="font-weight:500;">${e.category} <span class="badge del">deleted by ${e.deletedBy||'?'}</span></div>
-          <div class="muted">${e.date}${e.notes ? ' · '+e.notes : ''} · was ${fmt(e.amount)}${e.reason ? ' · reason: '+e.reason : ''}</div>
+    delEl.innerHTML = sorted.map((e,idx)=>{
+      const isOpen = expandedDeletedId===idx;
+      return `
+      <div class="row" style="flex-direction:column;align-items:stretch;cursor:pointer;" onclick="toggleExpandDeleted(${idx})">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+          <div>
+            <div style="font-weight:500;">${e.category} <span class="badge del">deleted by ${e.deletedBy||'?'}</span></div>
+            <div class="muted">${e.date} · ${fmt(e.amount)}</div>
+          </div>
+          <div style="font-size:12px;color:var(--muted);">${isOpen ? '▲' : '▼'}</div>
         </div>
+        ${isOpen ? `
+          <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);" onclick="event.stopPropagation();">
+            <div class="muted" style="line-height:1.7;">
+              <strong>Amount:</strong> ${fmt(e.amount)}<br>
+              <strong>Date:</strong> ${e.date}${e.createdAt ? ' at '+fmtTime(e.createdAt) : ''}<br>
+              <strong>Category:</strong> ${e.category}<br>
+              <strong>Paid by:</strong> ${e.payer}<br>
+              <strong>Split:</strong> ${e.split==='equal'?'Equal 50/50':e.split==='payer'?'Not shared (personal)':'Custom '+e.customPct+'/'+(100-e.customPct)}<br>
+              ${e.notes ? `<strong>Notes:</strong> ${e.notes}<br>` : ''}
+              ${e.receiptUrl ? `<strong>Receipt:</strong> <a href="${e.receiptUrl}" target="_blank">View screenshot</a><br>` : ''}
+              <strong>Deleted by:</strong> ${e.deletedBy||'?'}<br>
+              <strong>Deleted at:</strong> ${e.deletedAt ? new Date(e.deletedAt).toLocaleDateString('en-IN')+' at '+fmtTime(e.deletedAt) : 'Unknown'}<br>
+              <strong>Reason:</strong> ${e.reason||'—'}
+            </div>
+          </div>
+        ` : ''}
       </div>
-    `).join('');
+    `;}).join('');
   }
 }
 
