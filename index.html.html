@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Kharcha</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2a78d6">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kharcha">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{
+    --bg:#f4f3ef; --card:#ffffff; --border:#e8e6df; --text:#1f1e1c; --muted:#78766e;
+    --accent:#2a78d6; --accent2:#eb6834; --danger:#d03b3b; --success:#0ca30c;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text);
+    max-width:520px; margin:0 auto;
+    padding:0 0 90px 0;
+    font-size:16px;
+    -webkit-text-size-adjust:100%;
+  }
+  .topbar{
+    position:sticky; top:0; z-index:10;
+    background:var(--bg); padding:16px 16px 10px;
+    border-bottom:1px solid var(--border);
+  }
+  h1{font-size:19px; font-weight:700; margin:0 0 2px; display:flex; align-items:center; gap:8px;}
+  h2{font-size:15px; font-weight:600; margin:0 0 12px;}
+  #status{font-size:12px; color:var(--muted); margin:0;}
+  #status.err{color:var(--danger);}
+  #status.ok{color:var(--success);}
+
+  main{padding:14px 16px 0;}
+
+  /* bottom tab bar, app-style */
+  .tabs{
+    position:fixed; bottom:0; left:0; right:0;
+    max-width:520px; margin:0 auto;
+    display:flex; background:var(--card);
+    border-top:1px solid var(--border);
+    padding:6px 6px calc(6px + env(safe-area-inset-bottom));
+    z-index:20;
+  }
+  .tab{
+    flex:1; text-align:center; padding:8px 2px;
+    border-radius:10px; cursor:pointer;
+    font-size:11.5px; color:var(--muted); font-weight:500;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .tab .ic{font-size:19px;}
+  .tab.active{color:var(--accent); background:#eaf1fb;}
+
+  .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+
+  label{font-size:12.5px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;}
+  input,select{
+    width:100%; padding:11px 10px; border:1px solid var(--border); border-radius:9px;
+    font-size:16px; background:#fbfbfa; color:var(--text);
+  }
+  input:focus,select:focus{outline:2px solid var(--accent); outline-offset:-1px; background:#fff;}
+
+  button{padding:12px 18px; border:none; border-radius:10px; background:var(--accent); color:#fff; font-size:15px; font-weight:600; cursor:pointer;}
+  button:disabled{opacity:0.5; cursor:not-allowed;}
+  button.secondary{background:transparent; color:var(--text); border:1px solid var(--border);}
+  button.danger-solid{background:var(--danger);}
+  button.full{width:100%;}
+  button.icon-btn{padding:8px 10px; border-radius:8px; background:transparent; border:1px solid var(--border); color:var(--danger); font-size:13px; font-weight:500;}
+
+  .row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); gap:10px;}
+  .row:last-child{border-bottom:none;}
+  .muted{color:var(--muted); font-size:12.5px;}
+  .metric{background:#f1f0eb; border-radius:12px; padding:14px 8px; text-align:center;}
+  .metric .val{font-size:17px; font-weight:700;}
+  .metric .lbl{font-size:10.5px; color:var(--muted); margin-top:2px;}
+  .badge{font-size:11px; padding:2px 9px; border-radius:20px; background:#eef2fb; color:var(--accent); font-weight:600;}
+  .badge.del{background:#fbeaea; color:var(--danger);}
+
+  /* modal for delete confirm */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.45);
+    display:flex; align-items:flex-end; justify-content:center; z-index:100;
+  }
+  .modal-sheet{
+    background:#fff; width:100%; max-width:520px; border-radius:18px 18px 0 0;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+  }
+  .modal-sheet h3{margin:0 0 8px; font-size:16px;}
+  .modal-actions{display:flex; gap:10px; margin-top:16px;}
+  .modal-actions button{flex:1;}
+  /* v10 responsive transaction workspace */
+  .hero{background:linear-gradient(135deg,#12335f,#2a78d6);color:#fff;border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 10px 24px #2a78d633}.hero p{margin:5px 0 0;color:#dceaff;font-size:13px}.quick-actions{display:flex;gap:9px;margin-top:14px}.quick-actions button{flex:1;background:#fff;color:#174878}.taxonomy-hint{font-size:11px;color:var(--muted);margin-top:5px}.expense-table{width:100%;border-collapse:collapse;font-size:12px}.expense-table th{text-align:left;color:var(--muted);font-weight:600;padding:10px 7px;border-bottom:1px solid var(--border);white-space:nowrap}.expense-table td{padding:12px 7px;border-bottom:1px solid #f0eee8;vertical-align:middle}.expense-table tr{cursor:pointer}.expense-table tr:hover{background:#fafcff}.expense-item{font-weight:650;color:#172b4d}.receipt-dot{color:#2a78d6;font-size:15px}.type-pill{font-size:10px;padding:3px 6px;border-radius:999px;background:#edf6ed;color:#227a32}.settlement-pill{background:#fff4e8;color:#a95900}.table-wrap{overflow-x:auto;margin:0 -6px}.detail-panel{background:#f8f9fb;padding:12px;border-radius:10px;font-size:12px;line-height:1.7}.manage-row{padding:9px;border-bottom:1px solid var(--border);font-size:13px}.chip{display:inline-block;background:#edf4ff;color:#1e5fa9;padding:3px 7px;border-radius:999px;font-size:11px;margin:2px}#settings-lock{align-items:center;padding:18px}#settings-lock .modal-sheet{width:min(100%,420px);border-radius:18px;padding:22px}.report-filter{margin:0 0 14px;border:1px solid var(--border);border-radius:10px;padding:0 11px;background:#fafafa;font-size:12px}.report-filter summary{padding:10px 0;font-weight:600;cursor:pointer}.report-filter label{display:block;padding:7px 0;margin:0;color:var(--text);font-size:12px}.report-filter input{width:auto;margin-right:7px}.report-filter details{margin:4px 0 5px 22px;border-top:1px solid var(--border)}.report-filter details summary{padding:8px 0;font-size:12px;color:var(--muted)}.report-filter .date-options{padding:0 0 6px 10px}
+</style>
+</head>
+<body>
+
+<div id="lock-screen" style="min-height:90vh; display:flex; flex-direction:column; justify-content:center; padding:24px; text-align:center;">
+  <div style="font-size:44px; margin-bottom:8px;">🏠</div>
+  <h1 style="justify-content:center; font-size:21px;">Household Expenses</h1>
+  <p class="muted" style="margin-bottom:18px;">Enter the shared password to continue</p>
+  <input id="lock-input" type="password" placeholder="Password" style="margin-bottom:12px;" onkeydown="if(event.key==='Enter') tryUnlock()">
+  <button class="full" onclick="tryUnlock()">Unlock</button>
+  <p id="lock-error" style="color:var(--danger);font-size:12px;display:none;margin-top:10px;">Wrong password, try again.</p>
+</div>
+
+<div id="app-wrap" style="display:none;">
+<div class="topbar">
+  <h1>🏠 Household Expenses</h1>
+  <div id="status">Loading...</div>
+</div>
+
+<main>
+
+<div id="entry" class="tab-content">
+  <div class="hero"><strong>Record household spending</strong><p>Search an item once; its category is remembered for next time.</p><div class="quick-actions"><button onclick="showRecordMode('expense')">＋ Expense</button><button onclick="showRecordMode('settlement')">⇄ Settlement</button></div></div>
+  <div class="card">
+    <h2 id="record-title">New expense</h2>
+    <div id="expense-fields">
+    <div><label>Search item, category or subcategory</label><input id="f-item-search" list="item-options" placeholder="e.g. Biryani, Milk, Bus"><datalist id="item-options"></datalist><div id="taxonomy-preview" class="taxonomy-hint">Choose an item or set the fields below.</div></div>
+    <div class="grid2">
+      <div><label>Amount (₹)</label><input id="f-amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div><label>Date</label><input id="f-date" type="date"></div>
+      <div><label>Category</label><select id="f-category"></select></div>
+      <div><label>Subcategory</label><select id="f-subcategory"></select></div>
+      <div><label>Paid by</label><select id="f-payer"></select></div>
+      <div><label>Split</label>
+        <select id="f-split">
+          <option value="equal">Equal 50/50</option>
+          <option value="payer">Payer covers it (not shared)</option>
+          <option value="custom">Custom %</option>
+        </select>
+      </div>
+      <div id="f-custom-wrap" style="display:none;"><label>Payer's share %</label><input id="f-custom" type="number" value="50" min="0" max="100"></div>
+    </div>
+    <div style="margin-top:10px;"><label>Notes</label><input id="f-notes" placeholder="e.g. Big Bazaar - groceries"></div>
+    <div style="margin-top:10px;">
+      <label>Payment screenshot (optional)</label>
+      <input id="f-receipt" type="file" accept="image/*">
+      <div id="receipt-preview" style="margin-top:8px;"></div>
+    </div>
+    <div style="margin-top:14px;"><button id="add-btn" class="full" onclick="addExpense()">Add expense</button></div>
+    </div>
+    <div id="settlement-fields" style="display:none;">
+      <div class="grid2"><div><label>Amount (₹)</label><input id="s-amount" type="number" step="0.01" placeholder="0.00"></div><div><label>Settlement date</label><input id="s-date" type="date"></div><div><label>Paid / sent by</label><select id="s-payer"></select></div><div><label>Received by</label><select id="s-receiver"></select></div></div>
+      <div style="margin-top:10px;"><label>Note (optional)</label><input id="s-notes" placeholder="e.g. UPI settlement"></div>
+      <div style="margin-top:10px;"><label>Payment proof / UPI screenshot (optional)</label><input id="s-receipt" type="file" accept="image/*"><div id="s-receipt-preview" class="taxonomy-hint">Choose an existing photo or file. Camera capture is not requested.</div></div><div style="margin-top:14px;"><button class="full" onclick="addSettlement()">Record settlement</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="list" class="tab-content" style="display:none;">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
+      <h2 style="margin:0;">Expenses</h2>
+      <div style="display:flex;gap:6px;">
+        <select id="filter-payer" style="width:auto;"></select>
+        <select id="filter-month" style="width:auto;"></select>
+      </div>
+    </div>
+    <div id="expense-list"></div>
+  </div>
+</div>
+
+<div id="history" class="tab-content" style="display:none;">
+  <div class="card">
+    <h2>Deleted entries</h2>
+    <div id="deleted-list"><p class="muted">No deleted entries.</p></div>
+  </div>
+</div>
+
+<div id="delete-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-sheet">
+    <h3>Delete this expense?</h3>
+    <p class="muted" id="delete-modal-desc"></p>
+    <label>Who is deleting this?</label>
+    <select id="delete-modal-who"></select>
+    <label style="margin-top:10px;">Reason for deleting (required)</label>
+    <input id="delete-modal-reason" placeholder="e.g. entered twice by mistake">
+    <p id="delete-reason-error" style="color:var(--danger);font-size:12px;display:none;margin-top:6px;">Please enter a valid reason.</p>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="danger-solid" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="edit-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-sheet" style="max-height:85vh;overflow-y:auto;">
+    <h3>Edit expense</h3>
+    <div class="grid2">
+      <div><label>Amount (₹)</label><input id="e-amount" type="number" step="0.01"></div>
+      <div><label>Date</label><input id="e-date" type="date"></div>
+      <div><label>Category</label><select id="e-category"></select></div>
+      <div><label>Paid by</label><select id="e-payer"></select></div>
+      <div><label>Split</label>
+        <select id="e-split">
+          <option value="equal">Equal 50/50</option>
+          <option value="payer">Payer covers it (not shared)</option>
+          <option value="custom">Custom %</option>
+        </select>
+      </div>
+      <div id="e-custom-wrap" style="display:none;"><label>Payer's share %</label><input id="e-custom" type="number" min="0" max="100"></div>
+    </div>
+    <div style="margin-top:10px;"><label>Notes</label><input id="e-notes"></div>
+    <label style="margin-top:10px;">Who is editing?</label>
+    <select id="edit-modal-who"></select>
+    <label style="margin-top:10px;">Reason for editing (required)</label>
+    <input id="edit-modal-reason" placeholder="e.g. wrong amount entered">
+    <p id="edit-reason-error" style="color:var(--danger);font-size:12px;display:none;margin-top:6px;">Please enter a valid reason.</p>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeEditModal()">Cancel</button>
+      <button onclick="confirmEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<div id="reports" class="tab-content" style="display:none;">
+  <div class="card">
+    <h2>This month</h2>
+    <div class="grid3" id="metrics"></div>
+  </div>
+  <div class="card">
+    <h2>Personal vs shared spend</h2>
+    <div id="personal-breakdown"></div>
+  </div>
+  <div class="card">
+    <h2>Spend by category (this month)</h2>
+    <div style="position:relative;height:260px;"><canvas id="catChart" role="img" aria-label="Bar chart of spend by category"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Monthly trend & variance</h2>
+    <div style="position:relative;height:260px;"><canvas id="trendChart" role="img" aria-label="Line chart of monthly spend trend"></canvas></div>
+    <div id="variance-note" class="muted" style="margin-top:8px;"></div>
+  </div>
+  <div class="card">
+    <h2>Who owes whom</h2>
+    <div id="balance-box"></div>
+  </div>
+</div>
+
+<div id="settings" class="tab-content" style="display:none;">
+  <div class="card">
+    <h2>People</h2>
+    <div class="grid2">
+      <div><label>Person 1 name</label><input id="s-p1" placeholder="e.g. Raj"></div>
+      <div><label>Person 2 name</label><input id="s-p2" placeholder="e.g. Roommate"></div>
+    </div>
+    <div style="margin-top:10px;"><button onclick="saveNames()">Save names</button></div>
+  </div>
+  <div class="card">
+    <h2>Categories</h2>
+    <div id="cat-list"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <input id="new-cat" placeholder="New category">
+      <button class="secondary" onclick="addCategory()">Add</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Data source</h2>
+    <p class="muted">Connected to your Google Sheet via Apps Script.</p>
+    <button class="secondary" onclick="loadAll(true)">Refresh now</button>
+  </div>
+</div>
+
+<div id="settings-lock" class="modal-overlay" style="display:none;">
+  <div class="modal-sheet"><h3>Settings locked</h3><p class="muted">Enter the Settings password to change people or categories.</p><label>Password</label><input id="settings-password" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter') unlockSettings()"><p id="settings-lock-error" style="display:none;color:var(--danger);font-size:12px;">Incorrect password.</p><div class="modal-actions"><button class="secondary" onclick="closeSettingsLock()">Cancel</button><button onclick="unlockSettings()">Unlock settings</button></div></div>
+</div>
+
+</main>
+
+<div class="tabs">
+  <div class="tab active" data-tab="entry"><span class="ic">➕</span>Record</div>
+  <div class="tab" data-tab="list"><span class="ic">📋</span>Expenses</div>
+  <div class="tab" data-tab="reports"><span class="ic">📊</span>Reports</div>
+  <div class="tab" data-tab="history"><span class="ic">🕓</span>History</div>
+  <div class="tab" data-tab="settings"><span class="ic">⚙️</span>Settings</div>
+</div>
+
+<script>
+// ==== CONFIGURE THIS ====
+const API_URL = 'https://script.google.com/macros/s/AKfycbyGzgwexZLp_jlwknqpO7crEiiQePXGpO38rl4j8kmD1BiFY3nDVFv6jKzF5EcOJCk0wQ/exec';
+// =========================
+
+let EXPENSES = [];
+let DELETED = [];
+let EDITED = [];
+let CONFIG = { people: ['Person 1','Person 2'], categories: ['Groceries','Rent','Utilities','Dining out','Household items','Transport','Internet/Phone','Other'] };
+let pendingDeleteId = null;
+let pendingEditId = null;
+
+function setStatus(msg, cls){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = cls || '';
+}
+
+async function apiGet(action){
+  const url = action ? `${API_URL}?action=${action}` : API_URL;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+
+async function apiPost(payload){
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+
+document.getElementById('e-split').addEventListener('change', e=>{
+  document.getElementById('e-custom-wrap').style.display = e.target.value==='custom' ? 'block' : 'none';
+});
+
+function askEditExpense(id){
+  const e = EXPENSES.find(x=>x.id===id);
+  if(!e) return;
+  pendingEditId = id;
+  document.getElementById('e-amount').value = e.amount;
+  document.getElementById('e-date').value = String(e.date||'').slice(0,10);
+  document.getElementById('e-category').innerHTML = CONFIG.categories.map(c=>`<option ${c===e.category?'selected':''}>${c}</option>`).join('');
+  document.getElementById('e-payer').innerHTML = CONFIG.people.map(p=>`<option ${p===e.payer?'selected':''}>${p}</option>`).join('');
+  document.getElementById('e-split').value = e.split;
+  document.getElementById('e-custom-wrap').style.display = e.split==='custom' ? 'block' : 'none';
+  document.getElementById('e-custom').value = e.customPct || 50;
+  document.getElementById('e-notes').value = e.notes || '';
+  document.getElementById('edit-modal-who').innerHTML = CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+  document.getElementById('edit-modal-reason').value = '';
+  document.getElementById('edit-reason-error').style.display = 'none';
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+function closeEditModal(){
+  pendingEditId = null;
+  document.getElementById('edit-modal').style.display = 'none';
+}
+async function confirmEdit(){
+  const id = pendingEditId;
+  const original = EXPENSES.find(x=>x.id===id);
+  if(!id || !original) return;
+  const reason = document.getElementById('edit-modal-reason').value.trim();
+  if(!isValidReason(reason)){
+    document.getElementById('edit-reason-error').style.display = 'block';
+    return;
+  }
+  const editedBy = document.getElementById('edit-modal-who').value;
+  const updated = {
+    id,
+    amount: parseFloat(document.getElementById('e-amount').value),
+    date: document.getElementById('e-date').value,
+    category: document.getElementById('e-category').value,
+    payer: document.getElementById('e-payer').value,
+    split: document.getElementById('e-split').value,
+    customPct: document.getElementById('e-split').value==='custom' ? parseFloat(document.getElementById('e-custom').value)||50 : '',
+    notes: document.getElementById('e-notes').value,
+    createdAt: original.createdAt
+  };
+  closeEditModal();
+  try{
+    await apiPost({ action:'editExpense', original, updated, editedBy, reason });
+    const idx = EXPENSES.findIndex(x=>x.id===id);
+    updated.lastEditedBy = editedBy;
+    updated.lastEditReason = reason;
+    updated.lastEditedAt = new Date().toISOString();
+    EXPENSES[idx] = updated;
+    EDITED.unshift({ ...original, editedBy, reason, editedAt: new Date().toISOString() });
+    render();
+  }catch(e){
+    setStatus('Failed to save edit — try again', 'err');
+  }
+}
+
+document.getElementById('f-split').addEventListener('change', e=>{
+  document.getElementById('f-custom-wrap').style.display = e.target.value==='custom' ? 'block' : 'none';
+});
+
+function compressImage(file, maxWidth){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('f-receipt').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  const preview = document.getElementById('receipt-preview');
+  if(!file){ preview.innerHTML=''; return; }
+  preview.innerHTML = '<span class="muted">Preparing image...</span>';
+  const dataUrl = await compressImage(file, 800);
+  preview.innerHTML = `<img src="${dataUrl}" style="max-width:120px;border-radius:8px;border:1px solid var(--border);">`;
+  preview.dataset.dataurl = dataUrl;
+});
+
+function askDeleteExpense(id){
+  const e = EXPENSES.find(x=>x.id===id);
+  if(!e) return;
+  pendingDeleteId = id;
+  document.getElementById('delete-modal-desc').textContent = `${e.category} · ${fmt(e.amount)} · ${e.date}${e.notes ? ' · '+e.notes : ''}`;
+  document.getElementById('delete-modal-who').innerHTML = CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+  document.getElementById('delete-modal-reason').value = '';
+  document.getElementById('delete-reason-error').style.display = 'none';
+  document.getElementById('delete-modal').style.display = 'flex';
+}
+function closeDeleteModal(){
+  pendingDeleteId = null;
+  document.getElementById('delete-modal').style.display = 'none';
+}
+function isValidReason(text){
+  const cleaned = text.replace(/[.,!?;:\-–—_*"'()]/g, '').trim();
+  return cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned);
+}
+
+async function confirmDelete(){
+  const id = pendingDeleteId;
+  const deletedBy = document.getElementById('delete-modal-who').value;
+  const reason = document.getElementById('delete-modal-reason').value.trim();
+  if(!isValidReason(reason)){
+    document.getElementById('delete-reason-error').style.display = 'block';
+    return;
+  }
+  if(!id) return;
+  closeDeleteModal();
+  try{
+    await apiPost({ action:'deleteExpense', id, deletedBy, reason });
+    const removed = EXPENSES.find(e=>e.id===id);
+    EXPENSES = EXPENSES.filter(e=>e.id!==id);
+    if(removed) DELETED.unshift({ ...removed, deletedBy, reason, deletedAt: new Date().toISOString() });
+    render();
+  }catch(e){
+    setStatus('Failed to delete — try again', 'err');
+  }
+}
+
+async function saveNames(){
+  const p1 = document.getElementById('s-p1').value.trim() || CONFIG.people[0];
+  const p2 = document.getElementById('s-p2').value.trim() || CONFIG.people[1];
+  CONFIG.people = [p1,p2];
+  await apiPost({ action:'saveConfig', config: CONFIG });
+  render();
+}
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+    document.getElementById(t.dataset.tab).style.display='block';
+    if(t.dataset.tab==='reports') renderReports();
+    if(t.dataset.tab==='list') renderList();
+    if(t.dataset.tab==='history') renderHistory();
+  });
+});
+
+function fmt(n){ return '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:2}); }
+
+function fmtTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2,'0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if(h===0) h = 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+function render(){
+  populateSelects();
+  const months = [...new Set(EXPENSES.map(e=>monthKey(e.date)))].sort().reverse();
+  const filterEl = document.getElementById('filter-month');
+  const cur = filterEl.value;
+  filterEl.innerHTML = '<option value="all">All months</option>' + months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  if(months.includes(cur)) filterEl.value = cur;
+  filterEl.onchange = renderList;
+
+  const payerFilterEl = document.getElementById('filter-payer');
+  const curPayer = payerFilterEl.value;
+  payerFilterEl.innerHTML = '<option value="all">Everyone</option>' + CONFIG.people.map(p=>`<option>${p}</option>`).join('');
+  if(CONFIG.people.includes(curPayer)) payerFilterEl.value = curPayer;
+  payerFilterEl.onchange = renderList;
+
+  renderList();
+  renderSettings();
+  if(document.getElementById('reports').style.display!=='none') renderReports();
+}
+
+let expandedId = null;
+
+function toggleExpand(id){
+  expandedId = expandedId===id ? null : id;
+  renderList();
+}
+
+let expandedDeletedId = null;
+function toggleExpandDeleted(idx){
+  expandedDeletedId = expandedDeletedId===idx ? null : idx;
+  renderHistory();
+}
+
+let catChartInst, trendChartInst;
+
+const APP_PASSWORD = 'Expenses@2026';
+
+function tryUnlock(){
+  const val = document.getElementById('lock-input').value;
+  if(val === APP_PASSWORD){
+    sessionStorage.setItem('unlocked', 'yes');
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app-wrap').style.display = 'block';
+    startApp();
+  } else {
+    document.getElementById('lock-error').style.display = 'block';
+  }
+}
+
+function startApp(){
+  document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+  loadAll();
+}
+
+/* v10 taxonomy, settlement, and table overrides */
+const DEFAULT_TAXONOMY={
+ 'House & Rent':['Rent','Maintenance','Home Setup','Repairs & Services'], 'Groceries':['Food & Groceries','Fruits & Vegetables','Meat & Eggs','Snacks & Beverages'], 'Kitchen':['Utensils & Cookware','Kitchen Supplies','Kitchen Appliances'], 'Utilities':['Electricity','Water','Gas','Internet'], 'Household Supplies':['Cleaning','Laundry','Bathroom','Other Household'], 'Transportation':['Public Transport','Cab & Auto','Personal Vehicle','Parking & Toll'], 'Food Outside':['Restaurant','Food Delivery','Café & Snacks','Office Food'], 'Personal Care':['Toiletries','Grooming','Personal Hygiene'], 'Clothing':['Clothing','Footwear','Accessories'], 'Health':['Doctor & Hospital','Medicines','Tests & Pharmacy'], 'Work':['Office Travel','Office Meals','Work Miscellaneous'], 'Travel & Vacation':['Transport','Stay','Food','Activities']};
+let SETTLEMENTS=[];
+function escapeHtml(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function indianEntryTime(iso){if(!iso)return '—';const d=new Date(iso);if(isNaN(d))return '—';return d.toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'numeric',minute:'2-digit',hour12:true});}
+function ensureTaxonomy(){if(!CONFIG.taxonomy||typeof CONFIG.taxonomy!=='object'){const prior=Array.isArray(CONFIG.categories)?CONFIG.categories:[];CONFIG.taxonomy=JSON.parse(JSON.stringify(DEFAULT_TAXONOMY));prior.forEach(c=>{if(c&&!CONFIG.taxonomy[c])CONFIG.taxonomy[c]=['General'];});}CONFIG.categories=Object.keys(CONFIG.taxonomy);CONFIG.items=Array.isArray(CONFIG.items)?CONFIG.items:[];}
+function allItems(){ensureTaxonomy();const saved=CONFIG.items;const generic=[];Object.keys(CONFIG.taxonomy).forEach(c=>CONFIG.taxonomy[c].forEach(s=>generic.push({name:s,category:c,subcategory:s})));return [...saved,...generic];}
+async function loadAll(manual){setStatus('Syncing with Google Sheet...');try{const [expenses,config,deleted,edited,settlements]=await Promise.all([apiGet(),apiGet('getConfig'),apiGet('getDeleted'),apiGet('getEdited'),apiGet('getSettlements')]);EXPENSES=Array.isArray(expenses)?expenses:[];DELETED=Array.isArray(deleted)?deleted:[];EDITED=Array.isArray(edited)?edited:[];SETTLEMENTS=Array.isArray(settlements)?settlements:[];if(config&&typeof config==='object')CONFIG=Object.assign(CONFIG,config);ensureTaxonomy();setStatus('Synced with Google Sheet'+(manual?' (refreshed)':''),'ok');render();}catch(e){setStatus('Could not reach the Sheet — check the API URL and your internet connection','err');console.error(e);}}
+function populateSelects(){ensureTaxonomy();const cats=Object.keys(CONFIG.taxonomy);['f-category','e-category'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('');});const people=CONFIG.people.map(p=>`<option>${escapeHtml(p)}</option>`).join('');['f-payer','e-payer','s-payer','s-receiver'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=people;});populateSubcategories();document.getElementById('item-options').innerHTML=allItems().map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.category)} › ${escapeHtml(x.subcategory)}</option>`).join('');}
+function populateSubcategories(selected){const cat=document.getElementById('f-category').value,el=document.getElementById('f-subcategory'),subs=CONFIG.taxonomy[cat]||[];el.innerHTML=subs.map(s=>`<option ${s===selected?'selected':''}>${escapeHtml(s)}</option>`).join('');}
+function resolveItem(){const q=document.getElementById('f-item-search').value.trim().toLowerCase(),match=allItems().find(x=>x.name.toLowerCase()===q)||allItems().find(x=>x.name.toLowerCase().includes(q));if(match){document.getElementById('f-category').value=match.category;populateSubcategories(match.subcategory);document.getElementById('taxonomy-preview').textContent=`${match.category} › ${match.subcategory}`;}else document.getElementById('taxonomy-preview').textContent='New item — choose a category and subcategory; it will be remembered.';}
+document.addEventListener('change',e=>{if(e.target.id==='f-category')populateSubcategories();if(e.target.id==='f-item-search')resolveItem();});
+function showRecordMode(mode){document.getElementById('expense-fields').style.display=mode==='expense'?'block':'none';document.getElementById('settlement-fields').style.display=mode==='settlement'?'block':'none';document.getElementById('record-title').textContent=mode==='expense'?'New expense':'Record settlement';document.getElementById('s-date').value=document.getElementById('s-date').value||new Date().toISOString().slice(0,10);}
+async function addExpense(){const amount=parseFloat(document.getElementById('f-amount').value);if(!amount||amount<=0){alert('Enter a valid amount');return;}const item=document.getElementById('f-item-search').value.trim()||document.getElementById('f-subcategory').value||'Expense',category=document.getElementById('f-category').value,subcategory=document.getElementById('f-subcategory').value;if(!CONFIG.items.some(x=>x.name.toLowerCase()===item.toLowerCase())){CONFIG.items.push({name:item,category,subcategory});await apiPost({action:'saveConfig',config:CONFIG});}const expense={id:Date.now()+'-'+Math.random().toString(36).slice(2,7),amount,date:document.getElementById('f-date').value||new Date().toISOString().slice(0,10),category,subcategory,item,transactionType:'expense',payer:document.getElementById('f-payer').value,split:document.getElementById('f-split').value,customPct:document.getElementById('f-split').value==='custom'?parseFloat(document.getElementById('f-custom').value)||50:'',notes:document.getElementById('f-notes').value,createdAt:new Date().toISOString()};const receiptDataUrl=document.getElementById('receipt-preview').dataset.dataurl||'';try{await apiPost({action:'addExpense',expense,receiptDataUrl});EXPENSES.push(expense);['f-amount','f-notes','f-item-search'].forEach(id=>document.getElementById(id).value='');setStatus('Saved to Sheet','ok');render();}catch(e){setStatus('Failed to save — try again','err');}}
+document.getElementById('s-receipt').addEventListener('change',async e=>{const file=e.target.files[0],preview=document.getElementById('s-receipt-preview');if(!file){preview.textContent='Choose an existing photo or file. Camera capture is not requested.';return;}preview.textContent='Preparing payment proof…';try{const data=await compressImage(file,800);preview.innerHTML=`<img src="${data}" style="max-width:120px;border-radius:8px;border:1px solid var(--border);">`;preview.dataset.dataurl=data;}catch(err){preview.textContent='Could not read that image.';}});
+async function addSettlement(){const amount=parseFloat(document.getElementById('s-amount').value),payer=document.getElementById('s-payer').value,receiver=document.getElementById('s-receiver').value;if(!amount||amount<=0||payer===receiver){alert('Enter a valid amount and choose two different people.');return;}const settlement={id:'set-'+Date.now(),amount,date:document.getElementById('s-date').value||new Date().toISOString().slice(0,10),payer,receiver,notes:document.getElementById('s-notes').value,transactionType:'settlement',createdAt:new Date().toISOString()};const receiptDataUrl=document.getElementById('s-receipt-preview').dataset.dataurl||'';try{const result=await apiPost({action:'addSettlement',settlement,receiptDataUrl});settlement.receiptUrl=result.receiptUrl||'';SETTLEMENTS.push(settlement);['s-amount','s-notes'].forEach(id=>document.getElementById(id).value='');document.getElementById('s-receipt').value='';document.getElementById('s-receipt-preview').textContent='Choose an existing photo or file. Camera capture is not requested.';delete document.getElementById('s-receipt-preview').dataset.dataurl;setStatus('Settlement recorded','ok');render();}catch(e){setStatus('Failed to save settlement','err');}}
+function renderList(){const filter=document.getElementById('filter-month').value,payer=document.getElementById('filter-payer').value;const list=[...EXPENSES,...SETTLEMENTS].filter(e=>filter==='all'||monthKey(e.date)===filter).filter(e=>payer==='all'||e.payer===payer||e.receiver===payer).sort((a,b)=>String(b.date).localeCompare(String(a.date)));const el=document.getElementById('expense-list');if(!list.length){el.innerHTML='<p class="muted">No transactions yet. Record an expense or settlement to begin.</p>';return;}el.innerHTML=`<div class="table-wrap"><table class="expense-table"><thead><tr><th>#</th><th>Expense</th><th>Category</th><th>Paid by</th><th>Amount</th><th>Date & entry time</th><th>Type</th><th></th></tr></thead><tbody>${list.map((e,i)=>{const open=expandedId===e.id,isSet=e.transactionType==='settlement';return `<tr onclick="toggleExpand('${e.id}')"><td>${i+1}</td><td><div class="expense-item">${escapeHtml(isSet?'Settlement':e.item||e.category||'Expense')}</div>${e.receiptUrl?'<span class="receipt-dot" title="Receipt/proof attached">▣</span>':''}</td><td>${isSet?'—':`${escapeHtml(e.category||'Uncategorised')}<br><span class="muted">${escapeHtml(e.subcategory||'—')}</span>`}</td><td>${escapeHtml(e.payer||'—')}${isSet?` <span class="muted">→ ${escapeHtml(e.receiver)}</span>`:''}</td><td><strong>${fmt(e.amount)}</strong></td><td><span class="muted">${displayRecordDate(e.date,e.createdAt)}</span></td><td><span class="type-pill ${isSet?'settlement-pill':''}">${isSet?'Settlement':'Expense'}</span></td><td>${open?'⌃':'⌄'}</td></tr>${open?`<tr><td colspan="8"><div class="detail-panel"><strong>Details</strong><br>${isSet?`Settlement from ${escapeHtml(e.payer)} to ${escapeHtml(e.receiver)}.`:`${escapeHtml(e.category||'Uncategorised')} › ${escapeHtml(e.subcategory||'—')} · ${escapeHtml(e.split||'equal')} split.`}<br><span class="muted">Recorded: ${displayRecordDate(e.date,e.createdAt)}</span><br>${e.notes?`Note: ${escapeHtml(e.notes)}<br>`:''}${e.receiptUrl?`<a href="${escapeHtml(e.receiptUrl)}" target="_blank">View receipt / payment proof</a><br>`:''}${!isSet?`<button class="secondary" onclick="event.stopPropagation();askEditExpense('${e.id}')">Edit</button> <button class="icon-btn" onclick="event.stopPropagation();askDeleteExpense('${e.id}')">Delete</button>`:''}</div></td></tr>`:''}`;}).join('')}</tbody></table></div>`;}
+
+const SETTINGS_PASSWORD='Expenses@2026';
+let reportsPeriod='all', reportsDate='all', graphDimension='category', graphType='bar';
+function openSettings(){if(sessionStorage.getItem('settingsUnlocked')==='yes'){showTab('settings');return;}document.getElementById('settings-password').value='';document.getElementById('settings-lock-error').style.display='none';document.getElementById('settings-lock').style.display='flex';setTimeout(()=>document.getElementById('settings-password').focus(),50);}
+function closeSettingsLock(){document.getElementById('settings-lock').style.display='none';}
+function unlockSettings(){if(document.getElementById('settings-password').value===SETTINGS_PASSWORD){sessionStorage.setItem('settingsUnlocked','yes');closeSettingsLock();showTab('settings');}else document.getElementById('settings-lock-error').style.display='block';}
+function showTab(id){document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===id));document.querySelectorAll('.tab-content').forEach(x=>x.style.display=x.id===id?'block':'none');if(id==='reports')renderReports();if(id==='history')renderHistory();if(id==='list')renderList();}
+function setupSettingsLock(){const old=document.querySelector('.tab[data-tab="settings"]'),fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.addEventListener('click',openSettings);}
+
+function displayRecordDate(date,createdAt){let d='—',s=String(date||'');if(/^\d{4}-\d{2}-\d{2}$/.test(s)){const p=s.split('-');d=`${p[2]}/${p[1]}/${p[0]}`;}else{const x=new Date(s);if(!isNaN(x))d=x.toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'});}return `${d} ${indianEntryTime(createdAt)} (IST)`;}
+function shareRatio(e,person,p1,p2){if(e.split==='payer')return 0;if(e.split==='custom'){let pct=Number(e.customPct);if(!isFinite(pct))pct=50;return person===p1?(e.payer===p1?pct/100:(100-pct)/100):(e.payer===p1?(100-pct)/100:pct/100);}return .5;}
+function renderHistory(){const rows=[...DELETED].sort((a,b)=>String(b.deletedAt||'').localeCompare(String(a.deletedAt||''))),el=document.getElementById('deleted-list');if(!rows.length){el.innerHTML='<p class="muted">No deleted entries.</p>';return;}el.innerHTML=`<div class="table-wrap"><table class="expense-table"><thead><tr><th>#</th><th>Expense</th><th>Paid by</th><th>Amount</th><th>Recorded</th><th>Deleted</th><th></th></tr></thead><tbody>${rows.map((e,i)=>{const open=expandedDeletedId===i;return `<tr onclick="toggleExpandDeleted(${i})"><td>${i+1}</td><td><div class="expense-item">${escapeHtml(e.item||e.category||'Expense')}</div><span class="muted">${escapeHtml(e.category||'Uncategorised')} › ${escapeHtml(e.subcategory||'—')}</span></td><td>${escapeHtml(e.payer||'—')}</td><td><strong>${fmt(e.amount)}</strong></td><td><span class="muted">${displayRecordDate(e.date,e.createdAt)}</span></td><td><span class="muted">${e.deletedAt?new Date(e.deletedAt).toLocaleDateString('en-GB',{timeZone:'Asia/Kolkata'})+' '+indianEntryTime(e.deletedAt)+' (IST)':'—'}</span></td><td>${open?'⌃':'⌄'}</td></tr>${open?`<tr><td colspan="7"><div class="detail-panel"><strong>Deleted by:</strong> ${escapeHtml(e.deletedBy||'—')}<br><strong>Reason:</strong> ${escapeHtml(e.reason||'—')}<br>${e.notes?`<strong>Note:</strong> ${escapeHtml(e.notes)}<br>`:''}${e.receiptUrl?`<a href="${escapeHtml(e.receiptUrl)}" target="_blank">View receipt</a>`:''}</div></td></tr>`:''}`;}).join('')}</tbody></table></div>`;}
+
+let reportMonths=['all'],reportDates={};
+function reportDateLabel(d){return displayRecordDate(d,'').replace(' — (IST)','');}
+function selectedReportRecords(){return EXPENSES.filter(e=>{const m=monthKey(e.date);if(!reportMonths.includes('all')&&!reportMonths.includes(m))return false;const chosen=reportDates[m];return !chosen||chosen.includes(String(e.date));});}
+function toggleAllReportMonths(checked){reportMonths=checked?['all']:[];reportDates={};renderReports();}
+function toggleReportMonth(month,checked){reportMonths=reportMonths.filter(m=>m!=='all'&&m!==month);if(checked)reportMonths.push(month);if(!reportMonths.length)reportMonths=['all'];renderReports();}
+function toggleAllReportDates(month,checked){if(checked)delete reportDates[month];else reportDates[month]=[];renderReports();}
+function toggleReportDate(month,date,checked){const allDates=[...new Set(EXPENSES.filter(e=>monthKey(e.date)===month).map(e=>String(e.date)))];let picked=reportDates[month]||allDates.slice();picked=checked?[...new Set([...picked,date])]:picked.filter(d=>d!==date);reportDates[month]=picked;renderReports();}
+function reportFilterMarkup(months){const all=reportMonths.includes('all'),summary=all?'All time':reportMonths.map(m=>m).join(', ');return `<details class="report-filter"><summary>${escapeHtml(summary)} · Filter periods</summary><label><input type="checkbox" ${all?'checked':''} onchange="toggleAllReportMonths(this.checked)">All time</label>${months.map(m=>{const enabled=all||reportMonths.includes(m),dates=[...new Set(EXPENSES.filter(e=>monthKey(e.date)===m).map(e=>String(e.date)))].sort().reverse(),picked=reportDates[m],allDates=!picked;return `<details><summary><label><input type="checkbox" ${enabled?'checked':''} onchange="toggleReportMonth('${m}',this.checked)">${m}</label></summary><div class="date-options"><label><input type="checkbox" ${allDates?'checked':''} onchange="toggleAllReportDates('${m}',this.checked)">All dates</label>${dates.map(d=>`<label><input type="checkbox" ${allDates||picked.includes(d)?'checked':''} onchange="toggleReportDate('${m}','${escapeHtml(d)}',this.checked)">${escapeHtml(reportDateLabel(d))}</label>`).join('')}</div></details>`;}).join('')}</details>`;}
+function renderReports(){const months=[...new Set(EXPENSES.map(e=>monthKey(e.date)).filter(Boolean))].sort().reverse(),records=selectedReportRecords(),total=records.reduce((n,e)=>n+(Number(e.amount)||0),0),avg=records.length?total/records.length:0,title=document.querySelector('#reports .card h2'),topCard=title.closest('.card');title.textContent='Spending overview';let old=topCard.querySelector('.report-filter');if(old)old.remove();document.getElementById('metrics').insertAdjacentHTML('beforebegin',reportFilterMarkup(months));document.getElementById('metrics').innerHTML=`<div class="metric"><div class="val">${fmt(total)}</div><div class="lbl">Total spent</div></div><div class="metric"><div class="val">${records.length}</div><div class="lbl">Expenses</div></div><div class="metric"><div class="val">${fmt(avg)}</div><div class="lbl">Average</div></div>`;const [p1,p2]=CONFIG.people,stats={};CONFIG.people.forEach(p=>stats[p]={personal:0,shared:0,paid:0});records.forEach(e=>{const a=Number(e.amount)||0;if(stats[e.payer])stats[e.payer].paid+=a;if(e.split==='payer'){if(stats[e.payer])stats[e.payer].personal+=a;}else{stats[p1].shared+=a*shareRatio(e,p1,p1,p2);stats[p2].shared+=a*shareRatio(e,p2,p1,p2);}});document.getElementById('personal-breakdown').innerHTML=CONFIG.people.map(p=>`<div class="row" style="display:block;"><div style="display:flex;justify-content:space-between;"><strong>${escapeHtml(p)}</strong><strong>${fmt(stats[p].personal+stats[p].shared)}</strong></div><div class="muted" style="white-space:nowrap;font-size:10.5px;margin-top:4px;">Own ${fmt(stats[p].personal)} · Split ${fmt(stats[p].shared)} · Paid ${fmt(stats[p].paid)}</div></div>`).join('');const chartTitle=document.querySelectorAll('#reports .card h2')[2];chartTitle.innerHTML=`Spend analysis <select style="float:right;width:auto;font-size:12px;" onchange="graphType=this.value;renderReports()"><option value="bar">Bar</option><option value="doughnut">Donut</option></select><select style="float:right;width:auto;font-size:12px;margin-right:6px;" onchange="graphDimension=this.value;renderReports()"><option value="category">Category</option><option value="subcategory">Subcategory</option><option value="payer">Paid by</option></select>`;chartTitle.querySelectorAll('select')[0].value=graphType;chartTitle.querySelectorAll('select')[1].value=graphDimension;const grouped={};records.forEach(e=>{const key=graphDimension==='subcategory'?(e.subcategory||'Uncategorised'):graphDimension==='payer'?(e.payer||'Unknown'):(e.category||'Uncategorised');grouped[key]=(grouped[key]||0)+(Number(e.amount)||0);});if(catChartInst)catChartInst.destroy();catChartInst=new Chart(document.getElementById('catChart'),{type:graphType,data:{labels:Object.keys(grouped),datasets:[{data:Object.values(grouped),backgroundColor:['#2a78d6','#eb6834','#6f59c7','#16a085','#e4a11b','#d03b3b'],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:graphType==='doughnut'}},scales:graphType==='bar'?{y:{ticks:{callback:v=>'₹'+v}}}:{}}});const tm=months.slice(0,6).reverse(),trend=tm.map(m=>EXPENSES.filter(e=>monthKey(e.date)===m).reduce((n,e)=>n+(Number(e.amount)||0),0));if(trendChartInst)trendChartInst.destroy();trendChartInst=new Chart(document.getElementById('trendChart'),{type:'line',data:{labels:tm,datasets:[{data:trend,borderColor:'#eb6834',backgroundColor:'rgba(235,104,52,.12)',fill:true,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});document.getElementById('variance-note').textContent=trend.length>1?`Latest month is ${trend.at(-1)>=trend.at(-2)?'up':'down'} ${fmt(Math.abs(trend.at(-1)-trend.at(-2)))} from the previous month.`:'Add another month of expenses to see a trend.';let net=0;records.forEach(e=>{if(e.split==='payer')return;const a=Number(e.amount)||0;if(e.payer===p1)net+=a*shareRatio(e,p2,p1,p2);else if(e.payer===p2)net-=a*shareRatio(e,p1,p1,p2);});SETTLEMENTS.filter(s=>reportMonths.includes('all')||reportMonths.includes(monthKey(s.date))).forEach(s=>{const a=Number(s.amount)||0;if(s.payer===p2&&s.receiver===p1)net-=a;if(s.payer===p1&&s.receiver===p2)net+=a;});document.getElementById('balance-box').innerHTML=Math.abs(net)<.5?'<p class="muted">You’re settled up for this selection.</p>':net>0?`<p><strong>${escapeHtml(p2)}</strong> owes <strong>${escapeHtml(p1)}</strong> <span style="color:var(--success);font-weight:600;">${fmt(net)}</span></p>`:`<p><strong>${escapeHtml(p1)}</strong> owes <strong>${escapeHtml(p2)}</strong> <span style="color:var(--success);font-weight:600;">${fmt(-net)}</span></p>`;}
+async function addCategory(){const v=document.getElementById('new-cat').value.trim();if(v&&!CONFIG.taxonomy[v]){CONFIG.taxonomy[v]=['General'];document.getElementById('new-cat').value='';await apiPost({action:'saveConfig',config:CONFIG});render();}}
+async function removeCategory(c){if(!confirm(`Remove ${c} from new entries? Existing expenses are unchanged.`))return;delete CONFIG.taxonomy[c];await apiPost({action:'saveConfig',config:CONFIG});render();}
+async function addSubcategory(c){const v=prompt(`New subcategory for ${c}`);if(v&&v.trim()&&!CONFIG.taxonomy[c].includes(v.trim())){CONFIG.taxonomy[c].push(v.trim());await apiPost({action:'saveConfig',config:CONFIG});render();}}
+function renderSettings(){ensureTaxonomy();document.getElementById('s-p1').value=CONFIG.people[0];document.getElementById('s-p2').value=CONFIG.people[1];document.getElementById('cat-list').innerHTML=Object.keys(CONFIG.taxonomy).map(c=>`<div class="manage-row"><strong>${escapeHtml(c)}</strong> <button class="danger" onclick="removeCategory('${escapeHtml(c)}')">✕</button> <button class="secondary" onclick="addSubcategory('${escapeHtml(c)}')">+ subcategory</button><div>${CONFIG.taxonomy[c].map(s=>`<span class="chip">${escapeHtml(s)}</span>`).join('')}</div></div>`).join('');}
+function monthKey(d){const s=String(d||'');if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,7);const x=new Date(s);if(isNaN(x))return '';const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit'}).formatToParts(x);return `${p.find(v=>v.type==='year').value}-${p.find(v=>v.type==='month').value}`;}
+setupSettingsLock();
+if(sessionStorage.getItem('unlocked') === 'yes'){
+  document.getElementById('lock-screen').style.display = 'none';
+  document.getElementById('app-wrap').style.display = 'block';
+  startApp();
+}
+
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}
+</script>
+</div>
+</body>
+</html>
